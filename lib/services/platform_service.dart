@@ -39,8 +39,10 @@ class PlatformService {
       _progressController = StreamController<Map<String, dynamic>>.broadcast();
       
       _progressChannel.setMethodCallHandler((call) async {
+        print('📊 DEBUG Flutter: Received method call: ${call.method}');
         if (call.method == 'onProgress') {
           final progress = Map<String, dynamic>.from(call.arguments);
+          print('📊 DEBUG Flutter: Progress update received: $progress');
           _progressController?.add(progress);
         }
       });

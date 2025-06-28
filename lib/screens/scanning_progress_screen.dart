@@ -23,8 +23,12 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
   @override
   void initState() {
     super.initState();
-    _startScanning();
+    // Initialize progress listening BEFORE starting scanning
     _listenToProgress();
+    // Small delay to ensure progress channel is set up
+    Future.delayed(const Duration(milliseconds: 100), () {
+      _startScanning();
+    });
   }
 
   @override
@@ -37,10 +41,8 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
     try {
       final result = await PlatformService.scanAllPhotos();
       
-      if (_isComplete) {
-        // Process the final results
-        await _processScanResults(result);
-      }
+      // Always process the final results when scanAllPhotos completes
+      await _processScanResults(result);
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -54,13 +56,17 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
   void _listenToProgress() {
     _progressSubscription = PlatformService.getProgressStream().listen(
       (progress) {
+        print('📊 DEBUG Flutter UI: Progress listener received: $progress');
         if (mounted) {
           setState(() {
             _totalPhotos = progress['total'] ?? 0;
             _processedPhotos = progress['processed'] ?? 0;
             _slipsFound = progress['slipsFound'] ?? 0;
             _isComplete = progress['isComplete'] ?? false;
+            print('📊 DEBUG Flutter UI: Updated state - $_processedPhotos/$_totalPhotos, slips: $_slipsFound');
           });
+        } else {
+          print('📊 DEBUG Flutter UI: Widget not mounted, skipping update');
         }
       },
       onError: (error) {
@@ -77,63 +83,40 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
   Future<void> _processScanResults(Map<String, dynamic> result) async {
     try {
       final slips = result['slips'] as List<dynamic>;
+      print('🔍 DEBUG Flutter: Processing ${slips.length} slips from iOS');
+      
       final paymentSlips = slips.map((slip) {
         final slipData = Map<String, dynamic>.from(slip);
         
+        print('🔍 DEBUG Flutter: Raw slip data: $slipData');
+        print('🔍 DEBUG Flutter: Amount from iOS: ${slipData['amount']} (type: ${slipData['amount'].runtimeType})');
+        print('🔍 DEBUG Flutter: Date from iOS: ${slipData['date']}');
+        print('🔍 DEBUG Flutter: Text from iOS: ${slipData['text']}');
+        
         DateTime slipDate = DateTime.now();
         if (slipData['date'] != null && slipData['date'].toString().isNotEmpty) {
-          // Try to parse the date
-          String dateStr = slipData['date'];
-          try {
-            if (dateStr.contains('/')) {
-              List<String> parts = dateStr.split('/');
-              if (parts.length == 3) {
-                if (parts[2].length == 4) {
-                  // MM/DD/YYYY or DD/MM/YYYY
-                  slipDate = DateTime(
-                    int.parse(parts[2]),
-                    int.parse(parts[0]),
-                    int.parse(parts[1]),
-                  );
-                } else {
-                  // YYYY/MM/DD
-                  slipDate = DateTime(
-                    int.parse(parts[0]),
-                    int.parse(parts[1]),
-                    int.parse(parts[2]),
-                  );
-                }
-              }
-            } else if (dateStr.contains('-')) {
-              List<String> parts = dateStr.split('-');
-              if (parts.length == 3) {
-                if (parts[0].length == 4) {
-                  // YYYY-MM-DD
-                  slipDate = DateTime(
-                    int.parse(parts[0]),
-                    int.parse(parts[1]),
-                    int.parse(parts[2]),
-                  );
-                } else {
-                  // DD-MM-YYYY
-                  slipDate = DateTime(
-                    int.parse(parts[2]),
-                    int.parse(parts[1]),
-                    int.parse(parts[0]),
-                  );
-                }
-              }
-            }
-          } catch (e) {
-            // If parsing fails, use current date
-            slipDate = DateTime.now();
+          slipDate = _parseThaiDate(slipData['date']) ?? DateTime.now();
+          print('🔍 DEBUG Flutter: Parsed date: $slipDate');
+        }
+        
+        double amount = 0.0;
+        if (slipData['amount'] != null) {
+          if (slipData['amount'] is int) {
+            amount = (slipData['amount'] as int).toDouble();
+          } else if (slipData['amount'] is double) {
+            amount = slipData['amount'] as double;
+          } else {
+            // Try to parse as string
+            amount = double.tryParse(slipData['amount'].toString()) ?? 0.0;
           }
         }
+        
+        print('🔍 DEBUG Flutter: Final amount: $amount');
         
         return PaymentSlip(
           imagePath: slipData['assetId'] ?? '',
           assetId: slipData['assetId'],
-          amount: slipData['amount'] ?? 0.0,
+          amount: amount,
           date: slipDate,
           extractedText: slipData['text'] ?? '',
           createdAt: DateTime.now(),
@@ -159,6 +142,51 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
         });
       }
     }
+  }
+
+  DateTime? _parseThaiDate(String dateStr) {
+    try {
+      // Handle already converted dates (from iOS helper)
+      if (dateStr.contains('/')) {
+        List<String> parts = dateStr.split('/');
+        if (parts.length == 3) {
+          // Check if it's already in DD/MM/YYYY format from iOS conversion
+          if (parts[2].length == 4) {
+            return DateTime(
+              int.parse(parts[2]), // Year
+              int.parse(parts[1]), // Month
+              int.parse(parts[0]), // Day
+            );
+          }
+        }
+      }
+      
+      // Handle hyphen-separated dates
+      if (dateStr.contains('-')) {
+        List<String> parts = dateStr.split('-');
+        if (parts.length == 3) {
+          if (parts[0].length == 4) {
+            // YYYY-MM-DD
+            return DateTime(
+              int.parse(parts[0]),
+              int.parse(parts[1]),
+              int.parse(parts[2]),
+            );
+          } else {
+            // DD-MM-YYYY
+            return DateTime(
+              int.parse(parts[2]),
+              int.parse(parts[1]),
+              int.parse(parts[0]),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      // If parsing fails, return null to use current date
+    }
+    
+    return null;
   }
 
   void _showCompletionDialog(int processed, int found) {

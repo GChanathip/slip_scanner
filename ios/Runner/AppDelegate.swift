@@ -146,6 +146,12 @@ import Photos
             }
             
             processedCount += 1
+            
+            // Update progress immediately after each photo
+            self.currentProgress["processed"] = processedCount
+            self.sendProgressUpdate()
+            
+            print("📊 DEBUG: Processed photo \(processedCount)/\(totalCount), batch slips: \(batchSlips.count)")
           }
         }
         
@@ -155,6 +161,7 @@ import Photos
         
         self.currentProgress["processed"] = processedCount
         self.currentProgress["slipsFound"] = slipsFound
+        self.sendProgressUpdate()
         
         // Small delay to prevent overwhelming the system
         usleep(50000) // 50ms
@@ -198,11 +205,19 @@ import Photos
   }
   
   private func sendProgressUpdate() {
-    guard let controller = window?.rootViewController as? FlutterViewController else { return }
-    
-    let channel = FlutterMethodChannel(name: "com.example.slip_scanner/progress",
-                                      binaryMessenger: controller.binaryMessenger)
-    channel.invokeMethod("onProgress", arguments: currentProgress)
+    // Ensure progress updates are sent on the main thread
+    DispatchQueue.main.async {
+      guard let controller = self.window?.rootViewController as? FlutterViewController else { 
+        print("❌ DEBUG: Could not get FlutterViewController for progress update")
+        return 
+      }
+      
+      let channel = FlutterMethodChannel(name: "com.example.slip_scanner/progress",
+                                        binaryMessenger: controller.binaryMessenger)
+      
+      print("📊 DEBUG: Sending progress update: \(self.currentProgress)")
+      channel.invokeMethod("onProgress", arguments: self.currentProgress)
+    }
   }
   
   private func cancelScanning(result: @escaping FlutterResult) {
@@ -218,6 +233,8 @@ import Photos
   }
   
   private func processImageForPaymentSlip(cgImage: CGImage, assetId: String) -> [String: Any]? {
+    print("🔍 DEBUG: Processing image for payment slip with assetId: \(assetId)")
+    
     let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
     var extractedText = ""
     var amount: Double?
@@ -230,50 +247,61 @@ import Photos
       
       guard error == nil,
             let observations = request.results as? [VNRecognizedTextObservation] else {
+        print("❌ DEBUG: OCR error or no observations")
         return
       }
       
-      for observation in observations {
+      print("🔍 DEBUG: Processing \(observations.count) text observations")
+      
+      // First pass: collect all text and try individual lines
+      for (index, observation) in observations.enumerated() {
         guard let topCandidate = observation.topCandidates(1).first else { continue }
         let text = topCandidate.string
         extractedText += text + "\n"
         
-        // Extract amount (look for patterns like $123.45, 123.45, etc.)
+        print("🔍 DEBUG: Observation \(index + 1): '\(text)'")
+        
+        // Try to extract amount from individual line
         if amount == nil {
-          let amountPattern = #"[$€¥£]?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)"#
-          if let range = text.range(of: amountPattern, options: .regularExpression) {
-            let amountString = String(text[range])
-              .replacingOccurrences(of: "$", with: "")
-              .replacingOccurrences(of: "€", with: "")
-              .replacingOccurrences(of: "¥", with: "")
-              .replacingOccurrences(of: "£", with: "")
-              .replacingOccurrences(of: ",", with: "")
-              .replacingOccurrences(of: " ", with: "")
-            amount = Double(amountString)
+          amount = self.extractAmountFromText(text)
+          if amount != nil {
+            print("✅ DEBUG: Found amount \(amount!) in observation \(index + 1)")
           }
         }
         
-        // Extract date (look for common date patterns)
+        // Try to extract date from individual line
         if date == nil {
-          let datePatterns = [
-            #"\d{1,2}/\d{1,2}/\d{4}"#,
-            #"\d{1,2}-\d{1,2}-\d{4}"#,
-            #"\d{4}/\d{1,2}/\d{1,2}"#,
-            #"\d{4}-\d{1,2}-\d{1,2}"#
-          ]
-          
-          for pattern in datePatterns {
-            if let range = text.range(of: pattern, options: .regularExpression) {
-              date = String(text[range])
-              break
-            }
+          date = self.extractDateFromText(text)
+          if date != nil {
+            print("✅ DEBUG: Found date '\(date!)' in observation \(index + 1)")
           }
         }
       }
+      
+      // Second pass: try full combined text if amount not found
+      if amount == nil {
+        print("🔍 DEBUG: Trying amount extraction on full combined text")
+        amount = self.extractAmountFromText(extractedText)
+        if amount != nil {
+          print("✅ DEBUG: Found amount \(amount!) in combined text")
+        }
+      }
+      
+      // Second pass: try full combined text if date not found
+      if date == nil {
+        print("📅 DEBUG: Trying date extraction on full combined text")
+        date = self.extractDateFromText(extractedText)
+        if date != nil {
+          print("✅ DEBUG: Found date '\(date!)' in combined text")
+        }
+      }
+      
+      print("🔍 DEBUG: Final results - Amount: \(amount ?? 0), Date: '\(date ?? "none")'")
+      print("🔍 DEBUG: Full extracted text: '\(extractedText)'")
     }
     
     request.recognitionLevel = .accurate
-    request.recognitionLanguages = ["en-US"]
+    request.recognitionLanguages = ["th-TH", "en-US"]
     request.usesLanguageCorrection = true
     
     do {
@@ -326,42 +354,30 @@ import Photos
       var amount: Double?
       var date: String?
       
+      // First pass: collect all text and try individual lines
       for observation in observations {
         guard let topCandidate = observation.topCandidates(1).first else { continue }
         let text = topCandidate.string
         extractedText += text + "\n"
         
-        // Extract amount (look for patterns like $123.45, 123.45, etc.)
+        // Extract amount using improved Thai banking patterns
         if amount == nil {
-          let amountPattern = #"[$€¥£]?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)"#
-          if let range = text.range(of: amountPattern, options: .regularExpression) {
-            let amountString = String(text[range])
-              .replacingOccurrences(of: "$", with: "")
-              .replacingOccurrences(of: "€", with: "")
-              .replacingOccurrences(of: "¥", with: "")
-              .replacingOccurrences(of: "£", with: "")
-              .replacingOccurrences(of: ",", with: "")
-              .replacingOccurrences(of: " ", with: "")
-            amount = Double(amountString)
-          }
+          amount = self.extractAmountFromText(text)
         }
         
-        // Extract date (look for common date patterns)
+        // Extract date using improved Thai date patterns
         if date == nil {
-          let datePatterns = [
-            #"\d{1,2}/\d{1,2}/\d{4}"#,
-            #"\d{1,2}-\d{1,2}-\d{4}"#,
-            #"\d{4}/\d{1,2}/\d{1,2}"#,
-            #"\d{4}-\d{1,2}-\d{1,2}"#
-          ]
-          
-          for pattern in datePatterns {
-            if let range = text.range(of: pattern, options: .regularExpression) {
-              date = String(text[range])
-              break
-            }
-          }
+          date = self.extractDateFromText(text)
         }
+      }
+      
+      // Second pass: try full combined text if not found
+      if amount == nil {
+        amount = self.extractAmountFromText(extractedText)
+      }
+      
+      if date == nil {
+        date = self.extractDateFromText(extractedText)
       }
       
       let responseData: [String: Any] = [
@@ -375,7 +391,7 @@ import Photos
     }
     
     request.recognitionLevel = .accurate
-    request.recognitionLanguages = ["en-US"]
+    request.recognitionLanguages = ["th-TH", "en-US"]
     request.usesLanguageCorrection = true
     
     do {
@@ -410,5 +426,167 @@ import Photos
                          message: error.localizedDescription,
                          details: nil))
     }
+  }
+  
+  private func extractAmountFromText(_ text: String) -> Double? {
+    // Debug logging
+    print("🔍 DEBUG: Extracting amount from text: '\(text)'")
+    
+    // Thai banking patterns - PRIORITIZED ORDER (most specific first)
+    let thaiAmountPatterns = [
+      // 1. SCB format: "จำนวนเงิน 1,234.56" (with comma separators)
+      #"จำนวนเงิน\s*(\d{1,3}(?:,\d{3})*\.\d{2})"#,
+      
+      // 2. KBank format: "จำนวน: 1,234.56 บาท" (with comma separators)
+      #"จำนวน:\s*(\d{1,3}(?:,\d{3})*\.\d{2})\s*บาท"#,
+      
+      // 3. General format: "จำนวน 1,234.56 บาท" (with comma separators)
+      #"จำนวน\s+(\d{1,3}(?:,\d{3})*\.\d{2})\s*บาท"#,
+      
+      // 4. Simple format: "1,234.56 บาท" (with comma separators)
+      #"(\d{1,3}(?:,\d{3})*\.\d{2})\s*บาท"#,
+      
+      // 5. Any Thai banking context (fallback with comma separators)
+      #"(?:จำนวน|amount|เงิน).*?(\d{1,3}(?:,\d{3})*\.\d{2})"#,
+      
+      // 6. Decimal numbers with proper comma formatting
+      #"\b(\d{1,3}(?:,\d{3})*\.\d{2})\b"#,
+      
+      // 7. Simple decimal numbers (no commas, under 1000)
+      #"\b([1-9]\d{1,2}\.\d{2})\b"#,
+      
+      // 8. Specific patterns for common amounts
+      #"\b(70\.00)\b"#,
+      #"\b(520\.00)\b"#,
+      #"\b(1,000\.00)\b"#,
+      #"\b(10,000\.00)\b"#,
+      #"\b(100,000\.00)\b"#,
+      #"\b(1,000,000\.00)\b"#,
+    ]
+    
+    for (index, pattern) in thaiAmountPatterns.enumerated() {
+      print("🔍 DEBUG: Trying pattern \(index + 1): \(pattern)")
+      
+      if let range = text.range(of: pattern, options: .regularExpression) {
+        let matchedText = String(text[range])
+        print("🔍 DEBUG: Pattern \(index + 1) matched: '\(matchedText)'")
+        
+        // Extract just the number part (supports comma separators)
+        let numberPattern = #"(\d{1,3}(?:,\d{3})*\.\d{2})"#
+        if let numberRange = matchedText.range(of: numberPattern, options: .regularExpression) {
+          let amountString = String(matchedText[numberRange])
+            .replacingOccurrences(of: ",", with: "")  // Remove commas: "1,000.00" → "1000.00"
+            .replacingOccurrences(of: " ", with: "")  // Remove spaces
+          
+          print("🔍 DEBUG: Extracted amount string: '\(amountString)' (after comma removal)")
+          
+          if let amount = Double(amountString) {
+            print("✅ DEBUG: Successfully extracted amount: \(amount)")
+            return amount
+          } else {
+            print("❌ DEBUG: Failed to convert '\(amountString)' to Double")
+          }
+        } else {
+          print("❌ DEBUG: No number found in matched text: '\(matchedText)'")
+        }
+      }
+    }
+    
+    print("❌ DEBUG: No amount found in text")
+    return nil
+  }
+  
+  private func extractDateFromText(_ text: String) -> String? {
+    // Debug logging
+    print("📅 DEBUG: Extracting date from text: '\(text)'")
+    
+    // Thai date patterns with Buddhist calendar
+    let thaiDatePatterns = [
+      #"(\d{1,2})\s*มิ\.ย\.\s*(\d{2,4})"#, // June
+      #"(\d{1,2})\s*ม\.ค\.\s*(\d{2,4})"#, // January
+      #"(\d{1,2})\s*ก\.พ\.\s*(\d{2,4})"#, // February
+      #"(\d{1,2})\s*มี\.ค\.\s*(\d{2,4})"#, // March
+      #"(\d{1,2})\s*เม\.ย\.\s*(\d{2,4})"#, // April
+      #"(\d{1,2})\s*พ\.ค\.\s*(\d{2,4})"#, // May
+      #"(\d{1,2})\s*ก\.ค\.\s*(\d{2,4})"#, // July
+      #"(\d{1,2})\s*ส\.ค\.\s*(\d{2,4})"#, // August
+      #"(\d{1,2})\s*ก\.ย\.\s*(\d{2,4})"#, // September
+      #"(\d{1,2})\s*ต\.ค\.\s*(\d{2,4})"#, // October
+      #"(\d{1,2})\s*พ\.ย\.\s*(\d{2,4})"#, // November
+      #"(\d{1,2})\s*ธ\.ค\.\s*(\d{2,4})"#, // December
+      // International formats
+      #"\d{1,2}/\d{1,2}/\d{4}"#,
+      #"\d{1,2}-\d{1,2}-\d{4}"#,
+      #"\d{4}/\d{1,2}/\d{1,2}"#,
+      #"\d{4}-\d{1,2}-\d{1,2}"#
+    ]
+    
+    for (index, pattern) in thaiDatePatterns.enumerated() {
+      if let range = text.range(of: pattern, options: .regularExpression) {
+        let dateString = String(text[range])
+        print("✅ DEBUG: Found date with pattern \(index + 1): '\(dateString)'")
+        
+        // Convert Buddhist calendar to Gregorian if needed
+        if containsBuddhistYear(dateString) {
+          let convertedDate = convertBuddhistToGregorian(dateString)
+          print("📅 DEBUG: Converted Buddhist date '\(dateString)' to '\(convertedDate)'")
+          return convertedDate
+        }
+        
+        print("📅 DEBUG: Using date as-is: '\(dateString)'")
+        return dateString
+      }
+    }
+    
+    print("❌ DEBUG: No date found in text")
+    return nil
+  }
+  
+  private func containsBuddhistYear(_ dateString: String) -> Bool {
+    // Check for Buddhist Era years (typically 2500+ or 2-digit years in Thai context)
+    let buddhistYearPattern = #"25\d{2}|6[0-9]|7[0-9]"#
+    return dateString.range(of: buddhistYearPattern, options: .regularExpression) != nil
+  }
+  
+  private func convertBuddhistToGregorian(_ dateString: String) -> String {
+    let monthMap = [
+      "ม.ค.": "01", "ก.พ.": "02", "มี.ค.": "03", "เม.ย.": "04",
+      "พ.ค.": "05", "มิ.ย.": "06", "ก.ค.": "07", "ส.ค.": "08",
+      "ก.ย.": "09", "ต.ค.": "10", "พ.ย.": "11", "ธ.ค.": "12"
+    ]
+    
+    var result = dateString
+    
+    // Convert Thai month abbreviations to numbers
+    for (thaiMonth, monthNum) in monthMap {
+      result = result.replacingOccurrences(of: thaiMonth, with: "/\(monthNum)/")
+    }
+    
+    // Convert Buddhist year to Gregorian (subtract 543 years)
+    // Handle 4-digit Buddhist years (2500-2600 range)
+    let fourDigitBuddhistPattern = #"(25\d{2})"#
+    if let range = result.range(of: fourDigitBuddhistPattern, options: .regularExpression) {
+      let buddhistYear = String(result[range])
+      if let year = Int(buddhistYear) {
+        let gregorianYear = year - 543
+        result = result.replacingOccurrences(of: buddhistYear, with: String(gregorianYear))
+      }
+    }
+    
+    // Handle 2-digit Buddhist years (60-79 representing 2560-2579 BE)
+    let twoDigitBuddhistPattern = #"\b([6-7]\d)\b"#
+    if let range = result.range(of: twoDigitBuddhistPattern, options: .regularExpression) {
+      let shortYear = String(result[range])
+      if let year = Int(shortYear) {
+        let fullBuddhistYear = 2500 + year
+        let gregorianYear = fullBuddhistYear - 543
+        result = result.replacingOccurrences(of: shortYear, with: String(gregorianYear))
+      }
+    }
+    
+    // Clean up extra spaces and format
+    result = result.replacingOccurrences(of: "\\s+", with: "", options: .regularExpression)
+    
+    return result
   }
 }
