@@ -58,28 +58,58 @@ class DatabaseService {
   }
 
   static Future<void> insertPaymentSlipsBatch(List<PaymentSlip> slips) async {
-    final db = await database;
-    final batch = db.batch();
+    if (slips.isEmpty) return;
     
-    for (final slip in slips) {
-      // Check if this assetId already exists
-      if (slip.assetId != null) {
-        final existing = await db.query(
+    try {
+      final db = await database;
+      
+      // OPTIMIZATION: Get all existing assetIds in a single query
+      final existingAssetIds = <String>{};
+      final slipsWithAssetIds = slips.where((slip) => slip.assetId != null).toList();
+      
+      if (slipsWithAssetIds.isNotEmpty) {
+        final assetIdsToCheck = slipsWithAssetIds.map((slip) => slip.assetId!).toSet().toList();
+        final placeholders = List.filled(assetIdsToCheck.length, '?').join(',');
+        
+        final existingResult = await db.query(
           'payment_slips',
-          where: 'assetId = ?',
-          whereArgs: [slip.assetId],
-          limit: 1,
+          columns: ['assetId'],
+          where: 'assetId IN ($placeholders)',
+          whereArgs: assetIdsToCheck,
         );
         
-        if (existing.isEmpty) {
-          batch.insert('payment_slips', slip.toMap());
-        }
-      } else {
-        batch.insert('payment_slips', slip.toMap());
+        existingAssetIds.addAll(existingResult.map((row) => row['assetId'] as String));
+        print('🗃️ DEBUG: Found ${existingAssetIds.length} existing assetIds out of ${assetIdsToCheck.length} to check');
       }
+      
+      // Use transaction for atomicity
+      await db.transaction((txn) async {
+        final batch = txn.batch();
+        int insertCount = 0;
+        int skipCount = 0;
+        
+        for (final slip in slips) {
+          bool shouldInsert = true;
+          
+          if (slip.assetId != null && existingAssetIds.contains(slip.assetId)) {
+            shouldInsert = false;
+            skipCount++;
+          }
+          
+          if (shouldInsert) {
+            batch.insert('payment_slips', slip.toMap());
+            insertCount++;
+          }
+        }
+        
+        await batch.commit(noResult: true);
+        print('🗃️ DEBUG: Batch insert completed - inserted: $insertCount, skipped: $skipCount');
+      });
+      
+    } catch (e) {
+      print('❌ ERROR: Database batch insert failed: $e');
+      rethrow; // Re-throw to let caller handle the error
     }
-    
-    await batch.commit(noResult: true);
   }
 
   static Future<List<String>> getProcessedAssetIds() async {
@@ -94,14 +124,19 @@ class DatabaseService {
   }
 
   static Future<List<PaymentSlip>> getPaymentSlips() async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'payment_slips',
-      orderBy: 'date DESC',
-    );
-    return List.generate(maps.length, (i) {
-      return PaymentSlip.fromMap(maps[i]);
-    });
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'payment_slips',
+        orderBy: 'date DESC',
+      );
+      return List.generate(maps.length, (i) {
+        return PaymentSlip.fromMap(maps[i]);
+      });
+    } catch (e) {
+      print('❌ ERROR: Failed to get payment slips: $e');
+      return []; // Return empty list on error
+    }
   }
 
   static Future<List<PaymentSlip>> getPaymentSlipsByMonth(DateTime month) async {
@@ -122,21 +157,26 @@ class DatabaseService {
   }
 
   static Future<Map<String, double>> getMonthlyTotals() async {
-    final db = await database;
-    final List<Map<String, dynamic>> result = await db.rawQuery('''
-      SELECT 
-        strftime('%Y-%m', date) as month,
-        SUM(amount) as total
-      FROM payment_slips
-      GROUP BY strftime('%Y-%m', date)
-      ORDER BY month DESC
-    ''');
-    
-    Map<String, double> monthlyTotals = {};
-    for (var row in result) {
-      monthlyTotals[row['month']] = row['total'];
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> result = await db.rawQuery('''
+        SELECT 
+          strftime('%Y-%m', date) as month,
+          SUM(amount) as total
+        FROM payment_slips
+        GROUP BY strftime('%Y-%m', date)
+        ORDER BY month DESC
+      ''');
+      
+      Map<String, double> monthlyTotals = {};
+      for (var row in result) {
+        monthlyTotals[row['month']] = row['total'];
+      }
+      return monthlyTotals;
+    } catch (e) {
+      print('❌ ERROR: Failed to get monthly totals: $e');
+      return {}; // Return empty map on error
     }
-    return monthlyTotals;
   }
 
   static Future<void> deletePaymentSlip(int id) async {
