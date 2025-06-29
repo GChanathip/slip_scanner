@@ -13,19 +13,22 @@ class ScanningProgressScreen extends StatefulWidget {
 
 class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
   late StreamSubscription _progressSubscription;
+  late StreamSubscription _partialResultsSubscription;
   bool _isScanning = true;
   int _totalPhotos = 0;
   int _processedPhotos = 0;
   int _slipsFound = 0;
   bool _isComplete = false;
   String? _error;
+  List<Map<String, dynamic>> _accumulatedSlips = [];
 
   @override
   void initState() {
     super.initState();
-    // Initialize progress listening BEFORE starting scanning
+    // Initialize progress and partial results listening BEFORE starting scanning
     _listenToProgress();
-    // Small delay to ensure progress channel is set up
+    _listenToPartialResults();
+    // Small delay to ensure channels are set up
     Future.delayed(const Duration(milliseconds: 100), () {
       _startScanning();
     });
@@ -34,6 +37,7 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
   @override
   void dispose() {
     _progressSubscription.cancel();
+    _partialResultsSubscription.cancel();
     super.dispose();
   }
 
@@ -41,8 +45,8 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
     try {
       final result = await PlatformService.scanAllPhotos();
       
-      // Always process the final results when scanAllPhotos completes
-      await _processScanResults(result);
+      // Process the final results (which may be empty if using streaming)
+      await _processFinalResults(result);
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -80,51 +84,40 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
     );
   }
 
-  Future<void> _processScanResults(Map<String, dynamic> result) async {
-    try {
-      final slips = result['slips'] as List<dynamic>;
-      print('🔍 DEBUG Flutter: Processing ${slips.length} slips from iOS');
-      
-      final paymentSlips = slips.map((slip) {
-        final slipData = Map<String, dynamic>.from(slip);
-        
-        print('🔍 DEBUG Flutter: Raw slip data: $slipData');
-        print('🔍 DEBUG Flutter: Amount from iOS: ${slipData['amount']} (type: ${slipData['amount'].runtimeType})');
-        print('🔍 DEBUG Flutter: Date from iOS: ${slipData['date']}');
-        print('🔍 DEBUG Flutter: Text from iOS: ${slipData['text']}');
-        
-        DateTime slipDate = DateTime.now();
-        if (slipData['date'] != null && slipData['date'].toString().isNotEmpty) {
-          slipDate = _parseThaiDate(slipData['date']) ?? DateTime.now();
-          print('🔍 DEBUG Flutter: Parsed date: $slipDate');
-        }
-        
-        double amount = 0.0;
-        if (slipData['amount'] != null) {
-          if (slipData['amount'] is int) {
-            amount = (slipData['amount'] as int).toDouble();
-          } else if (slipData['amount'] is double) {
-            amount = slipData['amount'] as double;
-          } else {
-            // Try to parse as string
-            amount = double.tryParse(slipData['amount'].toString()) ?? 0.0;
+  void _listenToPartialResults() {
+    _partialResultsSubscription = PlatformService.getPartialResultsStream().listen(
+      (partialData) {
+        print('📦 DEBUG Flutter UI: Partial results received: ${partialData['slips']?.length ?? 0} slips');
+        if (mounted) {
+          final slips = partialData['slips'] as List<dynamic>? ?? [];
+          for (final slip in slips) {
+            _accumulatedSlips.add(Map<String, dynamic>.from(slip));
           }
+          print('📦 DEBUG Flutter UI: Total accumulated slips: ${_accumulatedSlips.length}');
         }
-        
-        print('🔍 DEBUG Flutter: Final amount: $amount');
-        
-        return PaymentSlip(
-          imagePath: slipData['assetId'] ?? '',
-          assetId: slipData['assetId'],
-          amount: amount,
-          date: slipDate,
-          extractedText: slipData['text'] ?? '',
-          createdAt: DateTime.now(),
-        );
-      }).toList();
+      },
+      onError: (error) {
+        print('📦 ERROR Flutter UI: Partial results error: $error');
+      },
+    );
+  }
 
-      // Save to database in batch
-      await DatabaseService.insertPaymentSlipsBatch(paymentSlips);
+  Future<void> _processFinalResults(Map<String, dynamic> result) async {
+    try {
+      // Use accumulated slips from partial results, fallback to final result slips
+      List<dynamic> allSlips = _accumulatedSlips.isNotEmpty 
+          ? _accumulatedSlips 
+          : (result['slips'] as List<dynamic>? ?? []);
+      
+      print('🔍 DEBUG Flutter: Processing ${allSlips.length} total slips (${_accumulatedSlips.length} from chunks, ${(result['slips'] as List<dynamic>? ?? []).length} from final)');
+      
+      if (allSlips.isNotEmpty) {
+        final paymentSlips = allSlips.map((slip) => _convertToPaymentSlip(slip)).toList();
+        
+        // Save to database in batch
+        await DatabaseService.insertPaymentSlipsBatch(paymentSlips);
+        print('✅ DEBUG Flutter: Saved ${paymentSlips.length} payment slips to database');
+      }
       
       if (mounted) {
         setState(() {
@@ -132,7 +125,10 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
         });
         
         // Show completion dialog and navigate back
-        _showCompletionDialog(result['processed'], result['slipsFound']);
+        _showCompletionDialog(
+          result['processed'] ?? _processedPhotos, 
+          result['slipsFound'] ?? allSlips.length
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -142,6 +138,44 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
         });
       }
     }
+  }
+
+  PaymentSlip _convertToPaymentSlip(dynamic slip) {
+    final slipData = Map<String, dynamic>.from(slip);
+    
+    print('🔍 DEBUG Flutter: Raw slip data: $slipData');
+    print('🔍 DEBUG Flutter: Amount from iOS: ${slipData['amount']} (type: ${slipData['amount'].runtimeType})');
+    print('🔍 DEBUG Flutter: Date from iOS: ${slipData['date']}');
+    print('🔍 DEBUG Flutter: Text from iOS: ${slipData['text']}');
+    
+    DateTime slipDate = DateTime.now();
+    if (slipData['date'] != null && slipData['date'].toString().isNotEmpty) {
+      slipDate = _parseThaiDate(slipData['date']) ?? DateTime.now();
+      print('🔍 DEBUG Flutter: Parsed date: $slipDate');
+    }
+    
+    double amount = 0.0;
+    if (slipData['amount'] != null) {
+      if (slipData['amount'] is int) {
+        amount = (slipData['amount'] as int).toDouble();
+      } else if (slipData['amount'] is double) {
+        amount = slipData['amount'] as double;
+      } else {
+        // Try to parse as string
+        amount = double.tryParse(slipData['amount'].toString()) ?? 0.0;
+      }
+    }
+    
+    print('🔍 DEBUG Flutter: Final amount: $amount');
+    
+    return PaymentSlip(
+      imagePath: slipData['assetId'] ?? '',
+      assetId: slipData['assetId'],
+      amount: amount,
+      date: slipDate,
+      extractedText: slipData['text'] ?? '',
+      createdAt: DateTime.now(),
+    );
   }
 
   DateTime? _parseThaiDate(String dateStr) {

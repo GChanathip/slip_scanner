@@ -3,7 +3,7 @@ import UIKit
 import Vision
 import Photos
 
-// MARK: - Progress Tracking Actor
+// Actor for thread-safe progress tracking
 actor ScanProgressTracker {
   private var processed = 0
   private let total: Int
@@ -35,7 +35,6 @@ actor ScanProgressTracker {
   }
 }
 
-// MARK: - AppDelegate
 @main
 @objc class AppDelegate: FlutterAppDelegate {
   private var scanningTask: Task<Void, Never>?
@@ -43,7 +42,6 @@ actor ScanProgressTracker {
   private var progressUpdateTask: Task<Void, Never>?
   private var currentProgress: [String: Any] = [:]
   
-  // MARK: - Application Lifecycle
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -88,7 +86,6 @@ actor ScanProgressTracker {
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
   
-  // MARK: - Photo Scanning
   private func scanAllPhotos(result: @escaping FlutterResult) {
     // Cancel any existing scan
     cancelScanning()
@@ -150,7 +147,6 @@ actor ScanProgressTracker {
     startProgressUpdates()
     
     var scannedSlips: [[String: Any]] = []
-    var allSlipsForFinalResult: [[String: Any]] = [] // Keep all slips for final result
     let chunkSize = 100 // Process and send results in chunks
     
     // Process photos with TaskGroup for concurrent execution
@@ -164,19 +160,12 @@ actor ScanProgressTracker {
           break
         }
         
-        // Wait if we have too many active tasks and process completed ones
+        // Wait if we have too many active tasks
         while activeTaskCount >= maxConcurrentTasks {
           if let slipData = await group.next() {
             activeTaskCount -= 1
             if let data = slipData {
               scannedSlips.append(data)
-              allSlipsForFinalResult.append(data) // Keep for final result
-              
-              // Send chunks when we have enough results
-              if scannedSlips.count >= chunkSize {
-                await sendResultsChunk(scannedSlips, isComplete: false, result: result)
-                scannedSlips.removeAll(keepingCapacity: true)
-              }
             }
           }
         }
@@ -187,25 +176,24 @@ actor ScanProgressTracker {
         group.addTask {
           return await self.processAssetAsync(asset)
         }
+        
+        // Send results in chunks to prevent memory buildup
+        if scannedSlips.count >= chunkSize {
+          await sendResultsChunk(scannedSlips, isComplete: false, result: result)
+          scannedSlips.removeAll(keepingCapacity: true)
+        }
       }
       
       // Process remaining tasks
       for await slipData in group {
         if let data = slipData {
           scannedSlips.append(data)
-          allSlipsForFinalResult.append(data) // Keep for final result
-          
-          // Send chunks for remaining results too
-          if scannedSlips.count >= chunkSize {
-            await sendResultsChunk(scannedSlips, isComplete: false, result: result)
-            scannedSlips.removeAll(keepingCapacity: true)
-          }
         }
       }
     }
     
-    // Send final results with all slips (remaining chunk + all slips as backup)
-    await sendFinalResults(scannedSlips, allSlips: allSlipsForFinalResult, result: result)
+    // Send final results
+    await sendFinalResults(scannedSlips, result: result)
   }
   
   private func processAssetAsync(_ asset: PHAsset) async -> [String: Any]? {
@@ -258,7 +246,6 @@ actor ScanProgressTracker {
     }
   }
   
-  // MARK: - Progress Management
   private func startProgressUpdates() {
     progressUpdateTask?.cancel()
     progressUpdateTask = Task {
@@ -283,52 +270,13 @@ actor ScanProgressTracker {
     }
   }
   
-  private func sendProgressUpdate() {
-    // Ensure progress updates are sent on the main thread
-    DispatchQueue.main.async {
-      guard let controller = self.window?.rootViewController as? FlutterViewController else { 
-        print("❌ DEBUG: Could not get FlutterViewController for progress update")
-        return 
-      }
-      
-      let channel = FlutterMethodChannel(name: "com.example.slip_scanner/progress",
-                                        binaryMessenger: controller.binaryMessenger)
-      
-      print("📊 DEBUG: Sending progress update: \(self.currentProgress)")
-      channel.invokeMethod("onProgress", arguments: self.currentProgress)
-    }
-  }
-  
-  // MARK: - Result Management
   private func sendResultsChunk(_ slips: [[String: Any]], isComplete: Bool, result: @escaping FlutterResult) async {
-    // Send partial results via progress channel to prevent memory buildup
-    await MainActor.run {
-      guard let controller = self.window?.rootViewController as? FlutterViewController else { 
-        print("❌ Could not get FlutterViewController for chunk update")
-        return 
-      }
-      
-      let channel = FlutterMethodChannel(name: "com.example.slip_scanner/progress",
-                                        binaryMessenger: controller.binaryMessenger)
-      
-      let chunkData: [String: Any] = [
-        "type": "partial_results",
-        "slips": slips,
-        "isComplete": isComplete
-      ]
-      
-      print("📦 Sending chunk with \(slips.count) slips, isComplete: \(isComplete)")
-      channel.invokeMethod("onPartialResults", arguments: chunkData)
-    }
+    // This would send partial results to Flutter to prevent memory buildup
+    // For now, we'll just accumulate them
   }
   
-  private func sendFinalResults(_ remainingSlips: [[String: Any]], allSlips: [[String: Any]], result: @escaping FlutterResult) async {
+  private func sendFinalResults(_ remainingSlips: [[String: Any]], result: @escaping FlutterResult) async {
     progressUpdateTask?.cancel()
-    
-    // Send any remaining slips as a final chunk
-    if !remainingSlips.isEmpty {
-      await sendResultsChunk(remainingSlips, isComplete: false, result: result)
-    }
     
     guard let tracker = progressTracker else { return }
     let finalProgress = await tracker.getProgress()
@@ -347,18 +295,16 @@ actor ScanProgressTracker {
                            message: "Scanning was cancelled",
                            details: nil))
       } else {
-        // Return summary with ALL slips as backup (Flutter prioritizes chunked results but falls back to this)
         result([
           "total": finalProgress.total,
           "processed": finalProgress.processed,
           "slipsFound": finalProgress.slipsFound,
-          "slips": allSlips // Include ALL slips as fallback for compatibility
+          "slips": remainingSlips
         ])
       }
     }
   }
   
-  // MARK: - Cancellation
   private func cancelScanning() {
     scanningTask?.cancel()
     progressUpdateTask?.cancel()
@@ -366,10 +312,27 @@ actor ScanProgressTracker {
     progressUpdateTask = nil
   }
   
-  // MARK: - Other Methods
+  // MARK: - Progress Updates
+  private func sendProgressUpdate() {
+    // Ensure progress updates are sent on the main thread
+    DispatchQueue.main.async {
+      guard let controller = self.window?.rootViewController as? FlutterViewController else { 
+        print("❌ DEBUG: Could not get FlutterViewController for progress update")
+        return 
+      }
+      
+      let channel = FlutterMethodChannel(name: "com.example.slip_scanner/progress",
+                                        binaryMessenger: controller.binaryMessenger)
+      
+      print("📊 DEBUG: Sending progress update: \(self.currentProgress)")
+      channel.invokeMethod("onProgress", arguments: self.currentProgress)
+    }
+  }
+  
+  // MARK: - Placeholder Methods
   private func getProcessedPhotoIds(result: @escaping FlutterResult) {
-    // Return empty array since we don't track processed photo IDs in this implementation
-    // If persistence is needed, this would query the SQLite database for existing assetIds
+    // This would typically come from your database
+    // For now, return empty array
     result([])
   }
   
@@ -383,63 +346,302 @@ actor ScanProgressTracker {
       var extractedText = ""
       var amount: Double?
       var date: String?
-      
-      let semaphore = DispatchSemaphore(value: 0)
-      
-      let request = VNRecognizeTextRequest { (request, error) in
-        defer { semaphore.signal() }
         
-        guard error == nil,
-              let observations = request.results as? [VNRecognizedTextObservation] else {
-          print("❌ DEBUG: OCR error or no observations")
-          return
-        }
+        let batchEnd = min(batchStart + self.dynamicBatchSize, totalCount)
         
-        print("🔍 DEBUG: Processing \(observations.count) text observations")
-        
-        // First pass: collect all text and try individual lines
-        for (index, observation) in observations.enumerated() {
-          guard let topCandidate = observation.topCandidates(1).first else { continue }
-          let text = topCandidate.string
-          extractedText += text + "\n"
+        // Process batch sequentially to avoid deadlock
+        autoreleasepool {
+          var batchSlips: [[String: Any]] = []
           
-          print("🔍 DEBUG: Observation \(index + 1): '\(text)'")
-          
-          // Try to extract amount from individual line
-          if amount == nil {
-            amount = self.extractAmountFromText(text)
-            if amount != nil {
-              print("✅ DEBUG: Found amount \(amount!) in observation \(index + 1)")
+          for i in batchStart..<batchEnd {
+            if self.scanningCancelled {
+              break
+            }
+            
+            let asset = assets.object(at: i)
+            
+            // Use async image requests to prevent deadlock
+            let asyncRequestOptions = PHImageRequestOptions()
+            asyncRequestOptions.isSynchronous = false
+            asyncRequestOptions.deliveryMode = .highQualityFormat
+            asyncRequestOptions.resizeMode = .fast
+            asyncRequestOptions.isNetworkAccessAllowed = false
+            
+            let semaphore = DispatchSemaphore(value: 0)
+            var imageProcessed = false
+            
+            let requestID = imageManager.requestImage(
+              for: asset,
+              targetSize: CGSize(width: 512, height: 512),
+              contentMode: .aspectFit,
+              options: asyncRequestOptions
+            ) { image, info in
+              defer { 
+                if !imageProcessed {
+                  imageProcessed = true
+                  semaphore.signal()
+                }
+              }
+              
+              // Check if this is the final callback
+              let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
+              guard !isDegraded else { return }
+              
+              // Check cancellation
+              guard !self.scanningCancelled else { return }
+              
+              if let image = image,
+                 let cgImage = image.cgImage {
+                
+                if let slipData = self.processImageForPaymentSlip(cgImage: cgImage, assetId: asset.localIdentifier) {
+                  batchSlips.append(slipData)
+                }
+              }
+              
+              // Update progress on main thread with thread-safe counter
+              DispatchQueue.main.async {
+                let currentCount = self.processedCountQueue.sync {
+                  self.processedCount += 1
+                  return self.processedCount
+                }
+                
+                self.currentProgress["processed"] = currentCount
+                self.sendProgressUpdate()
+                
+                print("📊 DEBUG: Processed photo \(currentCount)/\(totalCount)")
+              }
+            }
+            
+            // Track active request
+            self.requestsQueue.sync {
+              self.activeImageRequests.append(requestID)
+            }
+            
+            // Wait for this image to complete before processing next
+            let waitResult = semaphore.wait(timeout: .now() + .seconds(10))
+            if waitResult == .timedOut {
+              print("⚠️ WARNING: Image \(i) processing timed out, skipping...")
+              // Cancel timed out request
+              imageManager.cancelImageRequest(requestID)
+            }
+            
+            // Remove from active requests
+            self.requestsQueue.sync {
+              self.activeImageRequests.removeAll { $0 == requestID }
             }
           }
           
-          // Try to extract date from individual line
-          if date == nil {
-            date = self.extractDateFromText(text)
-            if date != nil {
-              print("✅ DEBUG: Found date '\(date!)' in observation \(index + 1)")
+          // Update progress and store slips progressively
+          slipsFound += batchSlips.count
+          
+          // Store batch results and clear from memory immediately
+          if !batchSlips.isEmpty {
+            scannedSlips.append(contentsOf: batchSlips)
+            
+            // If we have too many slips in memory, force cleanup
+            if scannedSlips.count > 500 {
+              print("⚠️ WARNING: Large number of slips in memory (\(scannedSlips.count)). Forcing memory cleanup.")
+              
+              // Keep only most recent slips to prevent memory overflow
+              if scannedSlips.count > 1000 {
+                let keepCount = 800
+                scannedSlips = Array(scannedSlips.suffix(keepCount))
+                print("🗑️ Trimmed slips array to \(keepCount) items")
+              }
             }
           }
+          
+          let currentCount = self.processedCountQueue.sync { return self.processedCount }
+          self.currentProgress["processed"] = currentCount
+          self.currentProgress["slipsFound"] = slipsFound
+          self.sendProgressUpdate()
+          
+          print("📊 DEBUG: Completed batch \(batchStart)-\(batchEnd), found \(batchSlips.count) slips, total: \(slipsFound)")
+          
+          // Clear batch slips from memory
+          batchSlips.removeAll()
         }
         
-        // Second pass: try full combined text if amount not found
+        // Memory management delay
+        usleep(100000) // 100ms to allow memory cleanup
+      }
+      
+      // Complete scanning
+      let finalCount = self.processedCountQueue.sync { return self.processedCount }
+      self.currentProgress["processed"] = finalCount
+      self.currentProgress["slipsFound"] = slipsFound
+      self.currentProgress["isComplete"] = true
+      
+      DispatchQueue.main.async {
+        self.stopProgressTimer()
+        
+        if self.scanningCancelled {
+          result(FlutterError(code: "CANCELLED",
+                             message: "Scanning was cancelled",
+                             details: nil))
+        } else {
+          result([
+            "total": totalCount,
+            "processed": finalCount,
+            "slipsFound": slipsFound,
+            "slips": scannedSlips
+          ])
+        }
+      }
+    }
+  }
+  
+  private func adjustBatchSizeForMemoryPressure() {
+    let memoryUsage = getMemoryUsage()
+    let memoryPressureGB = Double(memoryUsage) / (1024.0 * 1024.0 * 1024.0) // Convert to GB
+    
+    if memoryPressureGB > 1.5 { // Over 1.5GB
+      dynamicBatchSize = max(minBatchSize, dynamicBatchSize - 5)
+      print("⚠️ HIGH MEMORY: Reducing batch size to \(dynamicBatchSize)")
+    } else if memoryPressureGB < 0.5 { // Under 0.5GB
+      dynamicBatchSize = min(maxBatchSize, dynamicBatchSize + 5)
+      print("✅ LOW MEMORY: Increasing batch size to \(dynamicBatchSize)")
+    }
+  }
+  
+  private func getMemoryUsage() -> UInt64 {
+    var info = mach_task_basic_info()
+    var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size)/4
+    
+    let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) {
+      $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
+        task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
+      }
+    }
+    
+    if kerr == KERN_SUCCESS {
+      return info.resident_size
+    } else {
+      return 0
+    }
+  }
+  
+  private func startProgressTimer() {
+    progressTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+      self.sendProgressUpdate()
+    }
+  }
+  
+  private func stopProgressTimer() {
+    progressTimer?.invalidate()
+    progressTimer = nil
+    // Send final progress update
+    sendProgressUpdate()
+  }
+  
+  private func sendProgressUpdate() {
+    // Ensure progress updates are sent on the main thread
+    DispatchQueue.main.async {
+      guard let controller = self.window?.rootViewController as? FlutterViewController else { 
+        print("❌ DEBUG: Could not get FlutterViewController for progress update")
+        return 
+      }
+      
+      let channel = FlutterMethodChannel(name: "com.example.slip_scanner/progress",
+                                        binaryMessenger: controller.binaryMessenger)
+      
+      print("📊 DEBUG: Sending progress update: \(self.currentProgress)")
+      channel.invokeMethod("onProgress", arguments: self.currentProgress)
+    }
+  }
+  
+  private func cancelScanning(result: @escaping FlutterResult) {
+    print("🛑 DEBUG: Cancelling scanning operation")
+    scanningCancelled = true
+    stopProgressTimer()
+    
+    // Cancel all active image requests
+    requestsQueue.sync {
+      let imageManager = PHImageManager.default()
+      for requestID in activeImageRequests {
+        imageManager.cancelImageRequest(requestID)
+      }
+      activeImageRequests.removeAll()
+    }
+    
+    // Give some time for ongoing operations to check cancellation flag
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+      result(true)
+    }
+  }
+  
+  private func getProcessedPhotoIds(result: @escaping FlutterResult) {
+    // This would typically come from your database
+    // For now, return empty array
+    result([])
+  }
+  
+  private func processImageForPaymentSlip(cgImage: CGImage, assetId: String) -> [String: Any]? {
+    print("🔍 DEBUG: Processing image for payment slip with assetId: \(assetId)")
+    
+    // Use autoreleasepool for Vision Framework operations
+    return autoreleasepool {
+      let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+      var extractedText = ""
+      var amount: Double?
+      var date: String?
+    
+    let semaphore = DispatchSemaphore(value: 0)
+    
+    let request = VNRecognizeTextRequest { (request, error) in
+      defer { semaphore.signal() }
+      
+      guard error == nil,
+            let observations = request.results as? [VNRecognizedTextObservation] else {
+        print("❌ DEBUG: OCR error or no observations")
+        return
+      }
+      
+      print("🔍 DEBUG: Processing \(observations.count) text observations")
+      
+      // First pass: collect all text and try individual lines
+      for (index, observation) in observations.enumerated() {
+        guard let topCandidate = observation.topCandidates(1).first else { continue }
+        let text = topCandidate.string
+        extractedText += text + "\n"
+        
+        print("🔍 DEBUG: Observation \(index + 1): '\(text)'")
+        
+        // Try to extract amount from individual line
         if amount == nil {
-          print("🔍 DEBUG: Trying amount extraction on full combined text")
-          amount = self.extractAmountFromText(extractedText)
+          amount = self.extractAmountFromText(text)
           if amount != nil {
-            print("✅ DEBUG: Found amount \(amount!) in combined text")
+            print("✅ DEBUG: Found amount \(amount!) in observation \(index + 1)")
           }
         }
         
-        // Second pass: try full combined text if date not found
+        // Try to extract date from individual line
         if date == nil {
-          print("📅 DEBUG: Trying date extraction on full combined text")
-          date = self.extractDateFromText(extractedText)
+          date = self.extractDateFromText(text)
           if date != nil {
-            print("✅ DEBUG: Found date '\(date!)' in combined text")
+            print("✅ DEBUG: Found date '\(date!)' in observation \(index + 1)")
           }
         }
-        
+      }
+      
+      // Second pass: try full combined text if amount not found
+      if amount == nil {
+        print("🔍 DEBUG: Trying amount extraction on full combined text")
+        amount = self.extractAmountFromText(extractedText)
+        if amount != nil {
+          print("✅ DEBUG: Found amount \(amount!) in combined text")
+        }
+      }
+      
+      // Second pass: try full combined text if date not found
+      if date == nil {
+        print("📅 DEBUG: Trying date extraction on full combined text")
+        date = self.extractDateFromText(extractedText)
+        if date != nil {
+          print("✅ DEBUG: Found date '\(date!)' in combined text")
+        }
+      }
+      
         print("🔍 DEBUG: Final results - Amount: \(amount ?? 0), Date: '\(date ?? "none")'")
         print("🔍 DEBUG: Full extracted text: '\(extractedText)'")
       }
@@ -584,7 +786,6 @@ actor ScanProgressTracker {
     }
   }
   
-  // MARK: - Text Extraction
   private func extractAmountFromText(_ text: String) -> Double? {
     // Debug logging
     print("🔍 DEBUG: Extracting amount from text: '\(text)'")

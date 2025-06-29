@@ -6,6 +6,7 @@ class PlatformService {
   static const MethodChannel _progressChannel = MethodChannel('com.example.slip_scanner/progress');
   
   static StreamController<Map<String, dynamic>>? _progressController;
+  static StreamController<Map<String, dynamic>>? _partialResultsController;
 
   static Future<Map<String, dynamic>> scanAllPhotos() async {
     try {
@@ -44,6 +45,10 @@ class PlatformService {
           final progress = Map<String, dynamic>.from(call.arguments);
           print('📊 DEBUG Flutter: Progress update received: $progress');
           _progressController?.add(progress);
+        } else if (call.method == 'onPartialResults') {
+          final partialData = Map<String, dynamic>.from(call.arguments);
+          print('📦 DEBUG Flutter: Partial results received: ${partialData['slips']?.length ?? 0} slips');
+          _partialResultsController?.add(partialData);
         }
       });
     }
@@ -51,9 +56,22 @@ class PlatformService {
     return _progressController!.stream;
   }
 
+  static Stream<Map<String, dynamic>> getPartialResultsStream() {
+    if (_partialResultsController == null) {
+      _partialResultsController = StreamController<Map<String, dynamic>>.broadcast();
+      
+      // Ensure the progress channel handler is set up (it handles both progress and partial results)
+      getProgressStream();
+    }
+    
+    return _partialResultsController!.stream;
+  }
+
   static void dispose() {
     _progressController?.close();
     _progressController = null;
+    _partialResultsController?.close();
+    _partialResultsController = null;
   }
 
   static Future<Map<String, dynamic>> scanPaymentSlip(String imagePath) async {
