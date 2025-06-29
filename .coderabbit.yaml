@@ -1,0 +1,40 @@
+language: "en-US"
+early_access: true
+reviews:
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: true
+  review_status: true
+  collapse_walkthrough: true
+  path_filters:
+    - "!**/.xml"
+  path_instructions:
+    - path: "lib/**/*.dart"
+      instructions: |
+        "Review the Dart code. Confirm that:
+        - The docstrings are up-to-date with the implementations. Please highlight the outdated ones.
+        - When an API in a module changes, ensure that all modules that depend on the changed module are updated accordingly.
+        - When seeing a TODO comment, try to write code to complete the todo."
+    - path: "ios/**/*.swift"
+      instructions: |
+        "Review the Swift code. Confirm that:
+        - The docstrings are up-to-date with the implementations. Please highlight the outdated ones.
+        - When an API in a module changes, ensure that all modules that depend on the changed module are updated accordingly.
+        - When seeing a TODO comment, try to write code to complete the todo."
+    - path: "android/**/*.kt"
+      instructions: |
+        "Review the Kotlin code. Confirm that:
+        - The docstrings are up-to-date with the implementations. Please highlight the outdated ones.
+        - When an API in a module changes, ensure that all modules that depend on the changed module are updated accordingly.
+        - When seeing a TODO comment, try to write code to complete the todo."
+  auto_review:
+    enabled: true
+    ignore_title_keywords:
+      - "WIP"
+    drafts: true
+    base_branches:
+      - "main"
+      - "feat/*"
+      - "fix/*"
+chat:
+  auto_reply: true
