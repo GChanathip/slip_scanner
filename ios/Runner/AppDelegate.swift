@@ -3,485 +3,542 @@ import UIKit
 import Vision
 import Photos
 
+// MARK: - Pre-compiled Regex Patterns (compiled once at launch)
+private struct RegexPatterns {
+    static let amountPatterns: [NSRegularExpression] = {
+        let patterns = [
+            #"จำนวนเงิน\s*(\d{1,3}(?:,\d{3})*\.\d{2})"#,
+            #"จำนวน:\s*(\d{1,3}(?:,\d{3})*\.\d{2})\s*บาท"#,
+            #"จำนวน\s+(\d{1,3}(?:,\d{3})*\.\d{2})\s*บาท"#,
+            #"(\d{1,3}(?:,\d{3})*\.\d{2})\s*บาท"#,
+            #"(?:จำนวน|amount|เงิน).*?(\d{1,3}(?:,\d{3})*\.\d{2})"#,
+            #"\b(\d{1,3}(?:,\d{3})*\.\d{2})\b"#,
+            #"\b([1-9]\d{1,2}\.\d{2})\b"#
+        ]
+        return patterns.compactMap { try? NSRegularExpression(pattern: $0) }
+    }()
+
+    static let numberExtractor: NSRegularExpression = {
+        try! NSRegularExpression(pattern: #"(\d{1,3}(?:,\d{3})*\.\d{2})"#)
+    }()
+
+    static let thaiMonthPatterns: [(regex: NSRegularExpression, month: String)] = {
+        let months = [
+            ("มิ\\.ย\\.", "06"), ("ม\\.ค\\.", "01"), ("ก\\.พ\\.", "02"),
+            ("มี\\.ค\\.", "03"), ("เม\\.ย\\.", "04"), ("พ\\.ค\\.", "05"),
+            ("ก\\.ค\\.", "07"), ("ส\\.ค\\.", "08"), ("ก\\.ย\\.", "09"),
+            ("ต\\.ค\\.", "10"), ("พ\\.ย\\.", "11"), ("ธ\\.ค\\.", "12")
+        ]
+        return months.compactMap { (pattern, month) in
+            guard let regex = try? NSRegularExpression(
+                pattern: "(\\d{1,2})\\s*\(pattern)\\s*(\\d{2,4})"
+            ) else { return nil }
+            return (regex, month)
+        }
+    }()
+
+    static let datePatterns: [NSRegularExpression] = {
+        let patterns = [
+            #"\d{1,2}/\d{1,2}/\d{4}"#,
+            #"\d{1,2}-\d{1,2}-\d{4}"#,
+            #"\d{4}/\d{1,2}/\d{1,2}"#,
+            #"\d{4}-\d{1,2}-\d{1,2}"#
+        ]
+        return patterns.compactMap { try? NSRegularExpression(pattern: $0) }
+    }()
+
+    static let buddhistYearPattern: NSRegularExpression = {
+        try! NSRegularExpression(pattern: #"25\d{2}|6[0-9]|7[0-9]"#)
+    }()
+
+    static let fourDigitBuddhistYear: NSRegularExpression = {
+        try! NSRegularExpression(pattern: #"(25\d{2})"#)
+    }()
+
+    static let twoDigitBuddhistYear: NSRegularExpression = {
+        try! NSRegularExpression(pattern: #"\b([6-7]\d)\b"#)
+    }()
+}
+
 // MARK: - AppDelegate
 @main
 @objc class AppDelegate: FlutterAppDelegate {
-  // Cached method channels
-  private var visionChannel: FlutterMethodChannel?
-  private var progressChannel: FlutterMethodChannel?
+    private var visionChannel: FlutterMethodChannel?
+    private var progressChannel: FlutterMethodChannel?
 
-  // Scanning state - thread-safe access via lock
-  private let stateLock = NSLock()
-  private var _isCancelled = false
-  private var isCancelled: Bool {
-    get { stateLock.lock(); defer { stateLock.unlock() }; return _isCancelled }
-    set { stateLock.lock(); defer { stateLock.unlock() }; _isCancelled = newValue }
-  }
-
-  // MARK: - Application Lifecycle
-  override func application(
-    _ application: UIApplication,
-    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
-  ) -> Bool {
-    let controller = window?.rootViewController as! FlutterViewController
-
-    // Create and cache method channels once
-    visionChannel = FlutterMethodChannel(name: "com.example.slip_scanner/vision",
-                                         binaryMessenger: controller.binaryMessenger)
-    progressChannel = FlutterMethodChannel(name: "com.example.slip_scanner/progress",
-                                           binaryMessenger: controller.binaryMessenger)
-
-    visionChannel?.setMethodCallHandler({ [weak self] (call, result) in
-      switch call.method {
-      case "scanAllPhotos":
-        self?.scanAllPhotos(result: result)
-      case "cancelScanning":
-        self?.cancelScanning()
-        result(true)
-      case "getProcessedPhotoIds":
-        result([])
-      case "scanPaymentSlip":
-        guard let args = call.arguments as? [String: Any],
-              let imagePath = args["imagePath"] as? String else {
-          result(FlutterError(code: "INVALID_ARGUMENT", message: "Image path required", details: nil))
-          return
-        }
-        self?.scanPaymentSlip(imagePath: imagePath, result: result)
-      case "deleteSlipImage":
-        guard let args = call.arguments as? [String: Any],
-              let imagePath = args["imagePath"] as? String else {
-          result(FlutterError(code: "INVALID_ARGUMENT", message: "Image path required", details: nil))
-          return
-        }
-        self?.deleteSlipImage(imagePath: imagePath, result: result)
-      default:
-        result(FlutterMethodNotImplemented)
-      }
-    })
-
-    GeneratedPluginRegistrant.register(with: self)
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-  }
-
-  // MARK: - Photo Scanning (Fire-and-Forget Pattern)
-  private func scanAllPhotos(result: @escaping FlutterResult) {
-    // Cancel any existing scan
-    cancelScanning()
-    isCancelled = false
-
-    // Check photo library authorization
-    let status = PHPhotoLibrary.authorizationStatus()
-
-    guard status == .authorized || status == .limited else {
-      if status == .notDetermined {
-        PHPhotoLibrary.requestAuthorization { [weak self] newStatus in
-          DispatchQueue.main.async {
-            if newStatus == .authorized || newStatus == .limited {
-              self?.startBackgroundScanning(result: result)
-            } else {
-              result(FlutterError(code: "PERMISSION_DENIED", message: "Photo library access denied", details: nil))
-            }
-          }
-        }
-      } else {
-        result(FlutterError(code: "PERMISSION_DENIED", message: "Photo library access denied", details: nil))
-      }
-      return
+    private let stateLock = NSLock()
+    private var _isCancelled = false
+    private var isCancelled: Bool {
+        get { stateLock.lock(); defer { stateLock.unlock() }; return _isCancelled }
+        set { stateLock.lock(); defer { stateLock.unlock() }; _isCancelled = newValue }
     }
 
-    startBackgroundScanning(result: result)
-  }
+    private lazy var maxConcurrentOperations: Int = {
+        min(ProcessInfo.processInfo.activeProcessorCount, 6)
+    }()
 
-  private func startBackgroundScanning(result: @escaping FlutterResult) {
-    // RETURN IMMEDIATELY - don't block platform/UI thread!
-    result(["status": "started", "message": "Scanning started"])
+    override func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+    ) -> Bool {
+        let controller = window?.rootViewController as! FlutterViewController
 
-    // Do ALL work on background queue - completely off platform thread
-    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-      self?.performBackgroundScanning()
-    }
-  }
-
-  // MARK: - Background Scanning (runs entirely on background thread)
-  private func performBackgroundScanning() {
-    // Fetch all photos
-    let fetchOptions = PHFetchOptions()
-    fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-    fetchOptions.predicate = NSPredicate(format: "mediaType == %d", PHAssetMediaType.image.rawValue)
-
-    let assets = PHAsset.fetchAssets(with: fetchOptions)
-    let totalCount = assets.count
-
-    // Send initial progress
-    sendProgressFromBackground(total: totalCount, processed: 0, slipsFound: 0, isComplete: false)
-
-    // Process in optimized chunks with concurrent processing
-    let chunkSize = 25
-    var processedCount = 0
-    var totalSlipsFound = 0
-
-    for chunkStart in stride(from: 0, to: totalCount, by: chunkSize) {
-      // Check cancellation at chunk boundary
-      guard !isCancelled else {
-        #if DEBUG
-        print("🛑 Scanning cancelled at chunk \(chunkStart)")
-        #endif
-        break
-      }
-
-      // Process chunk with autoreleasepool for memory management
-      autoreleasepool {
-        let chunkEnd = min(chunkStart + chunkSize, totalCount)
-        var chunkSlips: [[String: Any]] = []
-
-        // Use DispatchGroup for concurrent processing within chunk
-        let group = DispatchGroup()
-        let concurrentQueue = DispatchQueue(label: "com.slip_scanner.chunk", attributes: .concurrent)
-        let slipsLock = NSLock()
-        let processedLock = NSLock()
-        var chunkProcessed = 0
-
-        for i in chunkStart..<chunkEnd {
-          // Check cancellation before each image
-          guard !isCancelled else { break }
-
-          group.enter()
-          concurrentQueue.async { [weak self] in
-            defer { group.leave() }
-            guard let self = self, !self.isCancelled else { return }
-
-            let asset = assets.object(at: i)
-            if let slip = self.processAssetSync(asset) {
-              slipsLock.lock()
-              chunkSlips.append(slip)
-              slipsLock.unlock()
-            }
-
-            processedLock.lock()
-            chunkProcessed += 1
-            processedLock.unlock()
-          }
-        }
-
-        // Wait for chunk to complete
-        group.wait()
-
-        // Update totals
-        processedCount += chunkProcessed
-        totalSlipsFound += chunkSlips.count
-
-        // Send partial results for this chunk
-        if !chunkSlips.isEmpty {
-          sendPartialResultsFromBackground(chunkSlips)
-        }
-
-        // Send progress update after each chunk
-        sendProgressFromBackground(
-          total: totalCount,
-          processed: processedCount,
-          slipsFound: totalSlipsFound,
-          isComplete: false
+        visionChannel = FlutterMethodChannel(
+            name: "com.example.slip_scanner/vision",
+            binaryMessenger: controller.binaryMessenger
         )
-      }
-      // Memory released here after autoreleasepool
-    }
+        progressChannel = FlutterMethodChannel(
+            name: "com.example.slip_scanner/progress",
+            binaryMessenger: controller.binaryMessenger
+        )
 
-    // Send completion
-    sendProgressFromBackground(
-      total: totalCount,
-      processed: processedCount,
-      slipsFound: totalSlipsFound,
-      isComplete: true
-    )
-
-    #if DEBUG
-    print("✅ Scanning complete: \(processedCount)/\(totalCount) processed, \(totalSlipsFound) slips found")
-    #endif
-  }
-
-  // MARK: - Image Processing (synchronous, called from background thread)
-  private func processAssetSync(_ asset: PHAsset) -> [String: Any]? {
-    // Load image synchronously (we're already on background thread)
-    var resultImage: CGImage?
-    let semaphore = DispatchSemaphore(value: 0)
-
-    let requestOptions = PHImageRequestOptions()
-    requestOptions.isSynchronous = false
-    requestOptions.deliveryMode = .highQualityFormat
-    requestOptions.resizeMode = .fast
-    requestOptions.isNetworkAccessAllowed = false
-
-    PHImageManager.default().requestImage(
-      for: asset,
-      targetSize: CGSize(width: 512, height: 512),
-      contentMode: .aspectFit,
-      options: requestOptions
-    ) { image, info in
-      let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
-      if !isDegraded {
-        resultImage = image?.cgImage
-        semaphore.signal()
-      }
-    }
-
-    // Wait with timeout
-    let waitResult = semaphore.wait(timeout: .now() + 5.0)
-    guard waitResult == .success, let cgImage = resultImage else {
-      return nil
-    }
-
-    // Process image for payment slip
-    return processImageForPaymentSlip(cgImage: cgImage, assetId: asset.localIdentifier)
-  }
-
-  private func processImageForPaymentSlip(cgImage: CGImage, assetId: String) -> [String: Any]? {
-    return autoreleasepool {
-      let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-      var extractedText = ""
-      var amount: Double?
-      var date: String?
-
-      let request = VNRecognizeTextRequest { [self] (request, error) in
-        guard error == nil,
-              let observations = request.results as? [VNRecognizedTextObservation] else { return }
-
-        for observation in observations {
-          guard let topCandidate = observation.topCandidates(1).first else { continue }
-          let text = topCandidate.string
-          extractedText += text + "\n"
-
-          if amount == nil { amount = extractAmountFromText(text) }
-          if date == nil { date = extractDateFromText(text) }
+        visionChannel?.setMethodCallHandler { [weak self] (call, result) in
+            switch call.method {
+            case "scanAllPhotos":
+                self?.scanAllPhotos(result: result)
+            case "cancelScanning":
+                self?.cancelScanning()
+                result(true)
+            case "getProcessedPhotoIds":
+                result([])
+            case "scanPaymentSlip":
+                guard let args = call.arguments as? [String: Any],
+                      let imagePath = args["imagePath"] as? String else {
+                    result(FlutterError(code: "INVALID_ARGUMENT", message: "Image path required", details: nil))
+                    return
+                }
+                self?.scanPaymentSlip(imagePath: imagePath, result: result)
+            case "deleteSlipImage":
+                guard let args = call.arguments as? [String: Any],
+                      let imagePath = args["imagePath"] as? String else {
+                    result(FlutterError(code: "INVALID_ARGUMENT", message: "Image path required", details: nil))
+                    return
+                }
+                self?.deleteSlipImage(imagePath: imagePath, result: result)
+            default:
+                result(FlutterMethodNotImplemented)
+            }
         }
 
-        if amount == nil { amount = extractAmountFromText(extractedText) }
-        if date == nil { date = extractDateFromText(extractedText) }
-      }
-
-      request.recognitionLevel = .accurate
-      request.recognitionLanguages = ["th-TH", "en-US"]
-      request.usesLanguageCorrection = true
-
-      do {
-        try requestHandler.perform([request])
-
-        if let foundAmount = amount, foundAmount > 0 {
-          let dateFormatter = DateFormatter()
-          dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
-          dateFormatter.timeZone = TimeZone(abbreviation: "UTC")
-
-          return [
-            "text": String(extractedText.prefix(10000)),
-            "amount": foundAmount,
-            "date": String((date ?? "").prefix(50)),
-            "assetId": String(assetId.prefix(100)),
-            "createdAt": dateFormatter.string(from: Date())
-          ]
-        }
-      } catch {
-        #if DEBUG
-        print("❌ Vision error: \(error)")
-        #endif
-      }
-
-      return nil
-    }
-  }
-
-  // MARK: - Thread-Safe Callbacks to Flutter (from background thread)
-  private func sendProgressFromBackground(total: Int, processed: Int, slipsFound: Int, isComplete: Bool) {
-    DispatchQueue.main.async { [weak self] in
-      self?.progressChannel?.invokeMethod("onProgress", arguments: [
-        "total": total,
-        "processed": processed,
-        "slipsFound": slipsFound,
-        "isComplete": isComplete
-      ])
-    }
-  }
-
-  private func sendPartialResultsFromBackground(_ slips: [[String: Any]]) {
-    DispatchQueue.main.async { [weak self] in
-      self?.progressChannel?.invokeMethod("onPartialResults", arguments: [
-        "type": "partial_results",
-        "slips": slips,
-        "isComplete": false
-      ])
-    }
-  }
-
-  // MARK: - Cancellation
-  private func cancelScanning() {
-    isCancelled = true
-  }
-
-  // MARK: - Single Image Scanning
-  private func scanPaymentSlip(imagePath: String, result: @escaping FlutterResult) {
-    guard let image = UIImage(contentsOfFile: imagePath),
-          let cgImage = image.cgImage else {
-      result(FlutterError(code: "IMAGE_ERROR", message: "Could not load image", details: nil))
-      return
+        GeneratedPluginRegistrant.register(with: self)
+        return super.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
 
-    // Process on background thread
-    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-      guard let self = self else { return }
+    // MARK: - Photo Scanning
+    private func scanAllPhotos(result: @escaping FlutterResult) {
+        cancelScanning()
+        isCancelled = false
 
-      let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-      var extractedText = ""
-      var amount: Double?
-      var date: String?
+        let status = PHPhotoLibrary.authorizationStatus()
 
-      let request = VNRecognizeTextRequest { [self] (request, error) in
-        guard error == nil,
-              let observations = request.results as? [VNRecognizedTextObservation] else { return }
-
-        for observation in observations {
-          guard let topCandidate = observation.topCandidates(1).first else { continue }
-          let text = topCandidate.string
-          extractedText += text + "\n"
-
-          if amount == nil { amount = self.extractAmountFromText(text) }
-          if date == nil { date = self.extractDateFromText(text) }
+        guard status == .authorized || status == .limited else {
+            if status == .notDetermined {
+                PHPhotoLibrary.requestAuthorization { [weak self] newStatus in
+                    DispatchQueue.main.async {
+                        if newStatus == .authorized || newStatus == .limited {
+                            self?.startBackgroundScanning(result: result)
+                        } else {
+                            result(FlutterError(code: "PERMISSION_DENIED", message: "Photo library access denied", details: nil))
+                        }
+                    }
+                }
+            } else {
+                result(FlutterError(code: "PERMISSION_DENIED", message: "Photo library access denied", details: nil))
+            }
+            return
         }
 
-        if amount == nil { amount = self.extractAmountFromText(extractedText) }
-        if date == nil { date = self.extractDateFromText(extractedText) }
-      }
+        startBackgroundScanning(result: result)
+    }
 
-      request.recognitionLevel = .accurate
-      request.recognitionLanguages = ["th-TH", "en-US"]
-      request.usesLanguageCorrection = true
+    private func startBackgroundScanning(result: @escaping FlutterResult) {
+        // Return immediately - don't block platform/UI thread
+        result(["status": "started", "message": "Scanning started"])
 
-      do {
-        try requestHandler.perform([request])
-
-        DispatchQueue.main.async {
-          result([
-            "text": extractedText,
-            "amount": amount ?? 0.0,
-            "date": date ?? "",
-            "imagePath": imagePath
-          ])
+        // Run on background thread (NOT Task{} which inherits MainActor)
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.performStreamingScanning()
         }
-      } catch {
-        DispatchQueue.main.async {
-          result(FlutterError(code: "VISION_ERROR", message: error.localizedDescription, details: nil))
+    }
+
+    // MARK: - Streaming Scan (real-time progress, NO chunking, NO throttling)
+    private func performStreamingScanning() {
+        let fetchOptions = PHFetchOptions()
+        fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        fetchOptions.predicate = NSPredicate(format: "mediaType == %d", PHAssetMediaType.image.rawValue)
+
+        let assets = PHAsset.fetchAssets(with: fetchOptions)
+        let totalCount = assets.count
+
+        guard totalCount > 0 else {
+            sendProgressFromBackground(total: 0, processed: 0, slipsFound: 0, isComplete: true)
+            return
         }
-      }
-    }
-  }
 
-  // MARK: - Delete Image
-  private func deleteSlipImage(imagePath: String, result: @escaping FlutterResult) {
-    if imagePath.contains("asset-library://") || imagePath.contains("ph://") {
-      result(true)
-      return
-    }
+        // Thread-safe counters using lock
+        let counterLock = NSLock()
+        var processedCount = 0
+        var slipsFoundCount = 0
 
-    let fileManager = FileManager.default
-    do {
-      if fileManager.fileExists(atPath: imagePath) {
-        try fileManager.removeItem(atPath: imagePath)
-      }
-      result(true)
-    } catch {
-      result(FlutterError(code: "DELETE_ERROR", message: error.localizedDescription, details: nil))
-    }
-  }
+        // Accumulate slips for batch sending (more efficient than one-by-one)
+        let slipsLock = NSLock()
+        var accumulatedSlips: [[String: Any]] = []
 
-  // MARK: - Text Extraction
-  private func extractAmountFromText(_ text: String) -> Double? {
-    let patterns = [
-      #"จำนวนเงิน\s*(\d{1,3}(?:,\d{3})*\.\d{2})"#,
-      #"จำนวน:\s*(\d{1,3}(?:,\d{3})*\.\d{2})\s*บาท"#,
-      #"จำนวน\s+(\d{1,3}(?:,\d{3})*\.\d{2})\s*บาท"#,
-      #"(\d{1,3}(?:,\d{3})*\.\d{2})\s*บาท"#,
-      #"(?:จำนวน|amount|เงิน).*?(\d{1,3}(?:,\d{3})*\.\d{2})"#,
-      #"\b(\d{1,3}(?:,\d{3})*\.\d{2})\b"#,
-      #"\b([1-9]\d{1,2}\.\d{2})\b"#,
-    ]
+        // Send initial progress
+        sendProgressFromBackground(total: totalCount, processed: 0, slipsFound: 0, isComplete: false)
 
-    for pattern in patterns {
-      if let range = text.range(of: pattern, options: .regularExpression) {
-        let matchedText = String(text[range])
-        let numberPattern = #"(\d{1,3}(?:,\d{3})*\.\d{2})"#
-        if let numberRange = matchedText.range(of: numberPattern, options: .regularExpression) {
-          let amountString = String(matchedText[numberRange])
-            .replacingOccurrences(of: ",", with: "")
-            .replacingOccurrences(of: " ", with: "")
-          if let amount = Double(amountString) {
-            return amount
-          }
+        // OperationQueue for bounded concurrency
+        let operationQueue = OperationQueue()
+        operationQueue.maxConcurrentOperationCount = maxConcurrentOperations
+        operationQueue.qualityOfService = .userInitiated
+
+        let completionGroup = DispatchGroup()
+
+        // Add ALL operations at once - OperationQueue handles concurrency
+        for i in 0..<totalCount {
+            guard !isCancelled else { break }
+
+            completionGroup.enter()
+            let asset = assets.object(at: i)
+
+            operationQueue.addOperation { [weak self] in
+                defer { completionGroup.leave() }
+                guard let self = self, !self.isCancelled else { return }
+
+                // Process single image with autoreleasepool
+                autoreleasepool {
+                    let slip = self.processAsset(asset)
+
+                    // Update counters
+                    counterLock.lock()
+                    processedCount += 1
+                    let currentProcessed = processedCount
+                    if slip != nil {
+                        slipsFoundCount += 1
+                    }
+                    let currentSlipsFound = slipsFoundCount
+                    counterLock.unlock()
+
+                    // Accumulate slip if found
+                    if let foundSlip = slip {
+                        slipsLock.lock()
+                        accumulatedSlips.append(foundSlip)
+                        // Send batch every 10 slips for efficiency
+                        var slipsToSend: [[String: Any]]? = nil
+                        if accumulatedSlips.count >= 10 {
+                            slipsToSend = accumulatedSlips
+                            accumulatedSlips = []
+                        }
+                        slipsLock.unlock()
+
+                        if let batch = slipsToSend {
+                            self.sendPartialResultsFromBackground(batch)
+                        }
+                    }
+
+                    // Send progress after EVERY image (no throttling)
+                    // DispatchQueue.main.async is non-blocking, won't slow down OCR
+                    self.sendProgressFromBackground(
+                        total: totalCount,
+                        processed: currentProcessed,
+                        slipsFound: currentSlipsFound,
+                        isComplete: false
+                    )
+                }
+            }
         }
-      }
-    }
-    return nil
-  }
 
-  private func extractDateFromText(_ text: String) -> String? {
-    let patterns = [
-      #"(\d{1,2})\s*มิ\.ย\.\s*(\d{2,4})"#,
-      #"(\d{1,2})\s*ม\.ค\.\s*(\d{2,4})"#,
-      #"(\d{1,2})\s*ก\.พ\.\s*(\d{2,4})"#,
-      #"(\d{1,2})\s*มี\.ค\.\s*(\d{2,4})"#,
-      #"(\d{1,2})\s*เม\.ย\.\s*(\d{2,4})"#,
-      #"(\d{1,2})\s*พ\.ค\.\s*(\d{2,4})"#,
-      #"(\d{1,2})\s*ก\.ค\.\s*(\d{2,4})"#,
-      #"(\d{1,2})\s*ส\.ค\.\s*(\d{2,4})"#,
-      #"(\d{1,2})\s*ก\.ย\.\s*(\d{2,4})"#,
-      #"(\d{1,2})\s*ต\.ค\.\s*(\d{2,4})"#,
-      #"(\d{1,2})\s*พ\.ย\.\s*(\d{2,4})"#,
-      #"(\d{1,2})\s*ธ\.ค\.\s*(\d{2,4})"#,
-      #"\d{1,2}/\d{1,2}/\d{4}"#,
-      #"\d{1,2}-\d{1,2}-\d{4}"#,
-      #"\d{4}/\d{1,2}/\d{1,2}"#,
-      #"\d{4}-\d{1,2}-\d{1,2}"#
-    ]
+        // Wait for all to complete
+        completionGroup.wait()
 
-    for pattern in patterns {
-      if let range = text.range(of: pattern, options: .regularExpression) {
-        let dateString = String(text[range])
-        if containsBuddhistYear(dateString) {
-          return convertBuddhistToGregorian(dateString)
+        // Send remaining slips
+        slipsLock.lock()
+        let remainingSlips = accumulatedSlips
+        slipsLock.unlock()
+
+        if !remainingSlips.isEmpty {
+            sendPartialResultsFromBackground(remainingSlips)
         }
-        return dateString
-      }
-    }
-    return nil
-  }
 
-  private func containsBuddhistYear(_ dateString: String) -> Bool {
-    let pattern = #"25\d{2}|6[0-9]|7[0-9]"#
-    return dateString.range(of: pattern, options: .regularExpression) != nil
-  }
+        // Send final
+        counterLock.lock()
+        let finalProcessed = processedCount
+        let finalSlipsFound = slipsFoundCount
+        counterLock.unlock()
 
-  private func convertBuddhistToGregorian(_ dateString: String) -> String {
-    let monthMap = [
-      "ม.ค.": "01", "ก.พ.": "02", "มี.ค.": "03", "เม.ย.": "04",
-      "พ.ค.": "05", "มิ.ย.": "06", "ก.ค.": "07", "ส.ค.": "08",
-      "ก.ย.": "09", "ต.ค.": "10", "พ.ย.": "11", "ธ.ค.": "12"
-    ]
-
-    var result = dateString
-    for (thai, num) in monthMap {
-      result = result.replacingOccurrences(of: thai, with: "/\(num)/")
+        sendProgressFromBackground(
+            total: totalCount,
+            processed: finalProcessed,
+            slipsFound: finalSlipsFound,
+            isComplete: true
+        )
     }
 
-    if let range = result.range(of: #"(25\d{2})"#, options: .regularExpression) {
-      let year = String(result[range])
-      if let y = Int(year) {
-        result = result.replacingOccurrences(of: year, with: String(y - 543))
-      }
+    // MARK: - Image Processing
+    private func processAsset(_ asset: PHAsset) -> [String: Any]? {
+        guard let cgImage = loadImageSync(from: asset) else {
+            return nil
+        }
+        return processImageForPaymentSlip(cgImage: cgImage, assetId: asset.localIdentifier)
     }
 
-    if let range = result.range(of: #"\b([6-7]\d)\b"#, options: .regularExpression) {
-      let shortYear = String(result[range])
-      if let y = Int(shortYear) {
-        result = result.replacingOccurrences(of: shortYear, with: String(2500 + y - 543))
-      }
+    private func loadImageSync(from asset: PHAsset) -> CGImage? {
+        var resultImage: CGImage?
+
+        let requestOptions = PHImageRequestOptions()
+        requestOptions.isSynchronous = true
+        requestOptions.deliveryMode = .highQualityFormat
+        requestOptions.resizeMode = .fast
+        requestOptions.isNetworkAccessAllowed = false
+
+        PHImageManager.default().requestImage(
+            for: asset,
+            targetSize: CGSize(width: 512, height: 512),
+            contentMode: .aspectFit,
+            options: requestOptions
+        ) { image, _ in
+            resultImage = image?.cgImage
+        }
+
+        return resultImage
     }
 
-    return result.replacingOccurrences(of: "\\s+", with: "", options: .regularExpression)
-  }
+    private func processImageForPaymentSlip(cgImage: CGImage, assetId: String) -> [String: Any]? {
+        let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        var extractedText = ""
+        var amount: Double?
+        var date: String?
+
+        let request = VNRecognizeTextRequest { [weak self] (request, error) in
+            guard let self = self,
+                  error == nil,
+                  let observations = request.results as? [VNRecognizedTextObservation] else { return }
+
+            for observation in observations {
+                guard let topCandidate = observation.topCandidates(1).first else { continue }
+                let text = topCandidate.string
+                extractedText += text + "\n"
+
+                if amount == nil { amount = self.extractAmountFromText(text) }
+                if date == nil { date = self.extractDateFromText(text) }
+            }
+
+            if amount == nil { amount = self.extractAmountFromText(extractedText) }
+            if date == nil { date = self.extractDateFromText(extractedText) }
+        }
+
+        request.recognitionLevel = .accurate
+        request.recognitionLanguages = ["th-TH", "en-US"]
+        request.usesLanguageCorrection = true
+
+        do {
+            try requestHandler.perform([request])
+
+            if let foundAmount = amount, foundAmount > 0 {
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+                dateFormatter.timeZone = TimeZone(abbreviation: "UTC")
+
+                return [
+                    "text": String(extractedText.prefix(10000)),
+                    "amount": foundAmount,
+                    "date": String((date ?? "").prefix(50)),
+                    "assetId": String(assetId.prefix(100)),
+                    "createdAt": dateFormatter.string(from: Date())
+                ]
+            }
+        } catch {
+            #if DEBUG
+            print("Vision error: \(error)")
+            #endif
+        }
+
+        return nil
+    }
+
+    // MARK: - Callbacks to Flutter (non-blocking)
+    private func sendProgressFromBackground(total: Int, processed: Int, slipsFound: Int, isComplete: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            self?.progressChannel?.invokeMethod("onProgress", arguments: [
+                "total": total,
+                "processed": processed,
+                "slipsFound": slipsFound,
+                "isComplete": isComplete
+            ])
+        }
+    }
+
+    private func sendPartialResultsFromBackground(_ slips: [[String: Any]]) {
+        DispatchQueue.main.async { [weak self] in
+            self?.progressChannel?.invokeMethod("onPartialResults", arguments: [
+                "type": "partial_results",
+                "slips": slips,
+                "isComplete": false
+            ])
+        }
+    }
+
+    private func cancelScanning() {
+        isCancelled = true
+    }
+
+    // MARK: - Single Image Scanning
+    private func scanPaymentSlip(imagePath: String, result: @escaping FlutterResult) {
+        guard let image = UIImage(contentsOfFile: imagePath),
+              let cgImage = image.cgImage else {
+            result(FlutterError(code: "IMAGE_ERROR", message: "Could not load image", details: nil))
+            return
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
+            let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+            var extractedText = ""
+            var amount: Double?
+            var date: String?
+
+            let request = VNRecognizeTextRequest { [weak self] (request, error) in
+                guard let self = self,
+                      error == nil,
+                      let observations = request.results as? [VNRecognizedTextObservation] else { return }
+
+                for observation in observations {
+                    guard let topCandidate = observation.topCandidates(1).first else { continue }
+                    let text = topCandidate.string
+                    extractedText += text + "\n"
+
+                    if amount == nil { amount = self.extractAmountFromText(text) }
+                    if date == nil { date = self.extractDateFromText(text) }
+                }
+
+                if amount == nil { amount = self.extractAmountFromText(extractedText) }
+                if date == nil { date = self.extractDateFromText(extractedText) }
+            }
+
+            request.recognitionLevel = .accurate
+            request.recognitionLanguages = ["th-TH", "en-US"]
+            request.usesLanguageCorrection = true
+
+            do {
+                try requestHandler.perform([request])
+
+                DispatchQueue.main.async {
+                    result([
+                        "text": extractedText,
+                        "amount": amount ?? 0.0,
+                        "date": date ?? "",
+                        "imagePath": imagePath
+                    ])
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    result(FlutterError(code: "VISION_ERROR", message: error.localizedDescription, details: nil))
+                }
+            }
+        }
+    }
+
+    private func deleteSlipImage(imagePath: String, result: @escaping FlutterResult) {
+        if imagePath.contains("asset-library://") || imagePath.contains("ph://") {
+            result(true)
+            return
+        }
+
+        let fileManager = FileManager.default
+        do {
+            if fileManager.fileExists(atPath: imagePath) {
+                try fileManager.removeItem(atPath: imagePath)
+            }
+            result(true)
+        } catch {
+            result(FlutterError(code: "DELETE_ERROR", message: error.localizedDescription, details: nil))
+        }
+    }
+
+    // MARK: - Text Extraction
+    private func extractAmountFromText(_ text: String) -> Double? {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        for regex in RegexPatterns.amountPatterns {
+            if let match = regex.firstMatch(in: text, options: [], range: range) {
+                let matchedText = nsText.substring(with: match.range)
+                let matchRange = NSRange(location: 0, length: matchedText.count)
+                if let numberMatch = RegexPatterns.numberExtractor.firstMatch(
+                    in: matchedText, options: [], range: matchRange
+                ) {
+                    let numberString = (matchedText as NSString)
+                        .substring(with: numberMatch.range)
+                        .replacingOccurrences(of: ",", with: "")
+                    if let amount = Double(numberString) {
+                        return amount
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    private func extractDateFromText(_ text: String) -> String? {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        for (regex, _) in RegexPatterns.thaiMonthPatterns {
+            if let match = regex.firstMatch(in: text, options: [], range: range) {
+                let dateString = nsText.substring(with: match.range)
+                if containsBuddhistYear(dateString) {
+                    return convertBuddhistToGregorian(dateString)
+                }
+                return dateString
+            }
+        }
+
+        for regex in RegexPatterns.datePatterns {
+            if let match = regex.firstMatch(in: text, options: [], range: range) {
+                return nsText.substring(with: match.range)
+            }
+        }
+        return nil
+    }
+
+    private func containsBuddhistYear(_ dateString: String) -> Bool {
+        let range = NSRange(location: 0, length: dateString.count)
+        return RegexPatterns.buddhistYearPattern.firstMatch(in: dateString, options: [], range: range) != nil
+    }
+
+    private func convertBuddhistToGregorian(_ dateString: String) -> String {
+        let monthMap = [
+            "ม.ค.": "01", "ก.พ.": "02", "มี.ค.": "03", "เม.ย.": "04",
+            "พ.ค.": "05", "มิ.ย.": "06", "ก.ค.": "07", "ส.ค.": "08",
+            "ก.ย.": "09", "ต.ค.": "10", "พ.ย.": "11", "ธ.ค.": "12"
+        ]
+
+        var result = dateString
+        for (thai, num) in monthMap {
+            result = result.replacingOccurrences(of: thai, with: "/\(num)/")
+        }
+
+        let nsResult = result as NSString
+        let range = NSRange(location: 0, length: nsResult.length)
+
+        if let match = RegexPatterns.fourDigitBuddhistYear.firstMatch(in: result, options: [], range: range) {
+            let year = nsResult.substring(with: match.range)
+            if let y = Int(year) {
+                result = result.replacingOccurrences(of: year, with: String(y - 543))
+            }
+        }
+
+        let nsResult2 = result as NSString
+        let range2 = NSRange(location: 0, length: nsResult2.length)
+
+        if let match = RegexPatterns.twoDigitBuddhistYear.firstMatch(in: result, options: [], range: range2) {
+            let shortYear = nsResult2.substring(with: match.range)
+            if let y = Int(shortYear) {
+                result = result.replacingOccurrences(of: shortYear, with: String(2500 + y - 543))
+            }
+        }
+
+        return result.replacingOccurrences(of: " ", with: "")
+    }
 }
