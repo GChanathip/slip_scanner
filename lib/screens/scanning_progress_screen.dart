@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'dart:async';
 import '../services/platform_service.dart';
 import '../services/database_service.dart';
@@ -63,18 +64,10 @@ DateTime? _parseThaiDateInIsolate(String dateStr) {
       if (parts.length == 3) {
         if (parts[0].length == 4) {
           // YYYY-MM-DD
-          return DateTime(
-            int.parse(parts[0]),
-            int.parse(parts[1]),
-            int.parse(parts[2]),
-          );
+          return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
         } else {
           // DD-MM-YYYY
-          return DateTime(
-            int.parse(parts[2]),
-            int.parse(parts[1]),
-            int.parse(parts[0]),
-          );
+          return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
         }
       }
     }
@@ -220,16 +213,13 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
   }
 
   void _showCompletionDialog(int processed, int found) {
-    showDialog(
+    showShadDialog(
       context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
+      builder: (context) => ShadDialog.alert(
         title: const Text('Scanning Complete'),
-        content: Text(
-          'Processed $processed photos and found $found payment slips.',
-        ),
+        description: Text('Processed $processed photos and found $found payment slips.'),
         actions: [
-          TextButton(
+          ShadButton(
             onPressed: () {
               Navigator.of(context).pop(); // Close dialog
               Navigator.of(context).pop(true); // Return to home with refresh signal
@@ -252,48 +242,36 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to cancel: $e')),
-        );
+        ShadSonner.of(context).show(ShadToast(title: const Text('Error'), description: Text('Failed to cancel: $e')));
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = ShadTheme.of(context);
+
     if (_error != null) {
       return Scaffold(
         appBar: AppBar(
           title: const Text('Scanning Error'),
-          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+          backgroundColor: theme.colorScheme.background,
+          foregroundColor: theme.colorScheme.foreground,
         ),
+        backgroundColor: theme.colorScheme.background,
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(
-                  Icons.error,
-                  size: 64,
-                  color: Colors.red,
-                ),
+                Icon(LucideIcons.circleAlert, size: 64, color: theme.colorScheme.destructive),
                 const SizedBox(height: 16),
-                Text(
-                  'Scanning Failed',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
+                Text('Scanning Failed', style: theme.textTheme.h2),
                 const SizedBox(height: 8),
-                Text(
-                  _error!,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
+                Text(_error!, textAlign: TextAlign.center, style: theme.textTheme.muted),
                 const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Go Back'),
-                ),
+                ShadButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Go Back')),
               ],
             ),
           ),
@@ -306,12 +284,14 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Scanning Photos'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        leading: IconButton(
-          icon: const Icon(Icons.close),
+        backgroundColor: theme.colorScheme.background,
+        foregroundColor: theme.colorScheme.foreground,
+        leading: ShadIconButton(
+          icon: const Icon(LucideIcons.x),
           onPressed: _isScanning ? _cancelScanning : () => Navigator.of(context).pop(false),
         ),
       ),
+      backgroundColor: theme.colorScheme.background,
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
@@ -327,7 +307,8 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
                     CircularProgressIndicator(
                       value: _isScanning ? progress : 1.0,
                       strokeWidth: 8,
-                      backgroundColor: Colors.grey[300],
+                      backgroundColor: theme.colorScheme.muted,
+                      valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
                     ),
                     Center(
                       child: Column(
@@ -335,15 +316,9 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
                         children: [
                           Text(
                             '${(_processedPhotos / (_totalPhotos == 0 ? 1 : _totalPhotos) * 100).toInt()}%',
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: theme.textTheme.h2.copyWith(fontWeight: FontWeight.bold),
                           ),
-                          if (_isScanning)
-                            Text(
-                              'Scanning',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
+                          if (_isScanning) Text('Scanning', style: theme.textTheme.small),
                         ],
                       ),
                     ),
@@ -355,17 +330,16 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
 
               // Status text
               Text(
-                _isScanning
-                    ? 'Scanning your photos for payment slips...'
-                    : 'Processing results...',
-                style: Theme.of(context).textTheme.titleMedium,
+                _isScanning ? 'Scanning your photos for payment slips...' : 'Processing results...',
+                style: theme.textTheme.large,
                 textAlign: TextAlign.center,
               ),
 
               const SizedBox(height: 24),
 
               // Progress stats
-              Card(
+              ShadCard(
+                width: double.infinity,
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -387,10 +361,7 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
                           const Text('Payment Slips Found:'),
                           Text(
                             '$_slipsFound',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).primaryColor,
-                            ),
+                            style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
                           ),
                         ],
                       ),
@@ -402,11 +373,7 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
               const SizedBox(height: 32),
 
               // Cancel button
-              if (_isScanning)
-                OutlinedButton(
-                  onPressed: _cancelScanning,
-                  child: const Text('Cancel Scanning'),
-                ),
+              if (_isScanning) ShadButton.outline(onPressed: _cancelScanning, child: const Text('Cancel Scanning')),
             ],
           ),
         ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'screens/home_screen.dart';
 
 void main() {
@@ -10,12 +11,12 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return ShadApp(
       title: 'Payment Slip Scanner',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
+      debugShowCheckedModeBanner: false,
+      theme: ShadThemeData(brightness: Brightness.light, colorScheme: const ShadZincColorScheme.light()),
+      darkTheme: ShadThemeData(brightness: Brightness.dark, colorScheme: const ShadZincColorScheme.dark()),
+      themeMode: ThemeMode.system,
       home: const HomeScreen(),
     );
   }

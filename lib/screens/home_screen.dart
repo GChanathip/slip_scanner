@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:intl/intl.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import '../models/payment_slip.dart';
 import '../services/database_service.dart';
 import 'monthly_view_screen.dart';
@@ -51,20 +51,18 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _startScanAllPhotos() async {
     // Check photo library permission
     PermissionStatus status = await Permission.photos.status;
-    
+
     if (!status.isGranted) {
       status = await Permission.photos.request();
     }
-    
+
     if (status.isGranted) {
       if (mounted) {
         final result = await Navigator.push<bool>(
           context,
-          MaterialPageRoute(
-            builder: (context) => const ScanningProgressScreen(),
-          ),
+          MaterialPageRoute(builder: (context) => const ScanningProgressScreen()),
         );
-        
+
         // Refresh data if scanning completed successfully
         if (result == true) {
           await _loadData();
@@ -73,20 +71,21 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } else if (status.isPermanentlyDenied) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Photo access denied. Please enable in Settings.'),
-            action: SnackBarAction(
-              label: 'Settings',
-              onPressed: () => openAppSettings(),
-            ),
+        ShadSonner.of(context).show(
+          ShadToast(
+            title: const Text('Photo Access Denied'),
+            description: const Text('Please enable photo access in Settings.'),
+            action: ShadButton.ghost(child: const Text('Settings'), onPressed: () => openAppSettings()),
           ),
         );
       }
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Photo library access is required to scan payment slips')),
+        ShadSonner.of(context).show(
+          const ShadToast(
+            title: Text('Permission Required'),
+            description: Text('Photo library access is required to scan payment slips'),
+          ),
         );
       }
     }
@@ -94,13 +93,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = ShadTheme.of(context);
     final currentMonthTotal = _monthlyTotals[DateFormat('yyyy-MM').format(DateTime.now())] ?? 0.0;
-    
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Payment Slip Scanner'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        backgroundColor: theme.colorScheme.background,
+        foregroundColor: theme.colorScheme.foreground,
       ),
+      backgroundColor: theme.colorScheme.background,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -108,209 +110,194 @@ class _HomeScreenState extends State<HomeScreen> {
                 await _loadData();
                 await _checkIfScannedBefore();
               },
-              child: SingleChildScrollView(
+              child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Scan All Photos Card
-                    Card(
-                      elevation: 4,
-                      color: Theme.of(context).primaryColor,
-                      child: InkWell(
-                        onTap: _startScanAllPhotos,
-                        borderRadius: BorderRadius.circular(12),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20.0),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Icon(
-                                  Icons.photo_library,
-                                  color: Colors.white,
-                                  size: 32,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      _hasScannedBefore ? 'Scan New Photos' : 'Scan All Photos',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      _hasScannedBefore 
-                                          ? 'Find new payment slips in your photos'
-                                          : 'Automatically find payment slips in your photo library',
-                                      style: TextStyle(
-                                        color: Colors.white.withValues(alpha: 0.9),
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Icon(
-                                Icons.arrow_forward_ios,
-                                color: Colors.white,
-                              ),
-                            ],
+                children: [
+                  // Scan All Photos Card - Use GestureDetector + ShadCard
+                  GestureDetector(
+                    onTap: _startScanAllPhotos,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [theme.colorScheme.primary, theme.colorScheme.primary.withValues(alpha: 0.8)],
+                        ),
+                        borderRadius: theme.radius,
+                      ),
+                      padding: const EdgeInsets.all(20.0),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(LucideIcons.images, color: theme.colorScheme.primaryForeground, size: 32),
                           ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _hasScannedBefore ? 'Scan New Photos' : 'Scan All Photos',
+                                  style: TextStyle(
+                                    color: theme.colorScheme.primaryForeground,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _hasScannedBefore
+                                      ? 'Find new payment slips in your photos'
+                                      : 'Automatically find payment slips in your photo library',
+                                  style: TextStyle(
+                                    color: theme.colorScheme.primaryForeground.withValues(alpha: 0.9),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(LucideIcons.arrowRight, color: theme.colorScheme.primaryForeground),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Current Month Summary Card
+                  if (_monthlyTotals.isNotEmpty) ...[
+                    ShadCard(
+                      title: const Text("This Month's Spending"),
+                      description: Text(
+                        '\$${currentMonthTotal.toStringAsFixed(2)}',
+                        style: theme.textTheme.h1.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      footer: ShadButton.ghost(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => MonthlyViewScreen(month: DateTime.now())),
+                          ).then((_) => _loadData());
+                        },
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text('View Details'),
+                            const SizedBox(width: 4),
+                            Icon(LucideIcons.arrowRight, size: 16),
+                          ],
                         ),
                       ),
                     ),
-                    
                     const SizedBox(height: 24),
-                    
-                    // Current Month Summary Card
-                    if (_monthlyTotals.isNotEmpty) ...[
-                      Card(
-                        elevation: 4,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'This Month\'s Spending',
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                '\$${currentMonthTotal.toStringAsFixed(2)}',
-                                style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                                  color: Theme.of(context).primaryColor,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => MonthlyViewScreen(
-                                        month: DateTime.now(),
-                                      ),
-                                    ),
-                                  ).then((_) => _loadData());
-                                },
-                                child: const Text('View Details →'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                    ],
-                    
-                    // Monthly Totals or Welcome Message
-                    if (_monthlyTotals.isNotEmpty) ...[
-                      Text(
-                        'Monthly Summary',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      ..._monthlyTotals.entries.take(3).map((entry) {
-                        final month = DateTime.parse('${entry.key}-01');
-                        return ListTile(
-                          title: Text(DateFormat('MMMM yyyy').format(month)),
-                          trailing: Text(
-                            '\$${entry.value.toStringAsFixed(2)}',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
+                  ],
+
+                  // Monthly Totals or Welcome Message
+                  if (_monthlyTotals.isNotEmpty) ...[
+                    Text('Monthly Summary', style: theme.textTheme.h3),
+                    const SizedBox(height: 8),
+                    ..._monthlyTotals.entries.take(3).map((entry) {
+                      final month = DateTime.parse('${entry.key}-01');
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0),
+                        child: GestureDetector(
                           onTap: () {
                             Navigator.push(
                               context,
-                              MaterialPageRoute(
-                                builder: (context) => MonthlyViewScreen(month: month),
-                              ),
+                              MaterialPageRoute(builder: (context) => MonthlyViewScreen(month: month)),
                             ).then((_) => _loadData());
                           },
-                        );
-                      }),
-                      
-                      const SizedBox(height: 24),
-                    ] else ...[
-                      // Welcome/Getting Started Section
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(20.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.lightbulb_outline,
-                                    color: Theme.of(context).primaryColor,
-                                    size: 32,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    'Getting Started',
-                                    style: Theme.of(context).textTheme.titleLarge,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              const Text(
-                                'Welcome to Payment Slip Scanner! This app automatically finds and tracks payment slips in your photo library.',
-                              ),
-                              const SizedBox(height: 12),
-                              const Text(
-                                '• Tap "Scan All Photos" to start\n'
-                                '• The app will find payment amounts and dates\n'
-                                '• View your spending organized by month\n'
-                                '• Delete slips to free up storage space',
-                              ),
-                            ],
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: theme.colorScheme.border),
+                              borderRadius: theme.radius,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(DateFormat('MMMM yyyy').format(month), style: theme.textTheme.p),
+                                Text(
+                                  '\$${entry.value.toStringAsFixed(2)}',
+                                  style: theme.textTheme.p.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
+                      );
+                    }),
+                    const SizedBox(height: 24),
+                  ] else ...[
+                    // Welcome/Getting Started Section
+                    ShadAlert(
+                      icon: Icon(LucideIcons.lightbulb, color: theme.colorScheme.primary),
+                      title: const Text('Getting Started'),
+                      description: const Text(
+                        'Welcome to Payment Slip Scanner! This app automatically finds and tracks payment slips in your photo library.\n\n'
+                        '• Tap "Scan All Photos" to start\n'
+                        '• The app will find payment amounts and dates\n'
+                        '• View your spending organized by month\n'
+                        '• Delete slips to free up storage space',
                       ),
-                      const SizedBox(height: 24),
-                    ],
-                    
-                    // Recent Slips
-                    if (_recentSlips.isNotEmpty) ...[
-                      Text(
-                        'Recent Slips',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      ..._recentSlips.map((slip) {
-                        return Card(
-                          child: ListTile(
-                            title: Text('\$${slip.amount.toStringAsFixed(2)}'),
-                            subtitle: Text(DateFormat('MMM dd, yyyy').format(slip.date)),
-                            trailing: const Icon(Icons.arrow_forward_ios),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => SlipDetailScreen(slip: slip),
-                                ),
-                              ).then((_) => _loadData());
-                            },
-                          ),
-                        );
-                      }),
-                    ],
+                    ),
+                    const SizedBox(height: 24),
                   ],
-                ),
+
+                  // Recent Slips
+                  if (_recentSlips.isNotEmpty) ...[
+                    Text('Recent Slips', style: theme.textTheme.h3),
+                    const SizedBox(height: 8),
+                    ..._recentSlips.map((slip) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0),
+                        child: GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => SlipDetailScreen(slip: slip)),
+                            ).then((_) => _loadData());
+                          },
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.card,
+                              border: Border.all(color: theme.colorScheme.border),
+                              borderRadius: theme.radius,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '\$${slip.amount.toStringAsFixed(2)}',
+                                      style: theme.textTheme.large.copyWith(fontWeight: FontWeight.bold),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(DateFormat('MMM dd, yyyy').format(slip.date), style: theme.textTheme.muted),
+                                  ],
+                                ),
+                                Icon(LucideIcons.chevronRight, size: 20, color: theme.colorScheme.mutedForeground),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
+                ],
               ),
             ),
     );

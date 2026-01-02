@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import '../models/payment_slip.dart';
 import '../services/database_service.dart';
 import '../services/platform_service.dart';
@@ -37,20 +37,14 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
   }
 
   Future<void> _deleteSlip(PaymentSlip slip) async {
-    final confirm = await showDialog<bool>(
+    final confirm = await showShadDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => ShadDialog.alert(
         title: const Text('Delete Slip'),
-        content: const Text('Are you sure you want to delete this payment slip?'),
+        description: const Text('Are you sure you want to delete this payment slip?'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
+          ShadButton.outline(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          ShadButton.destructive(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
         ],
       ),
     );
@@ -60,17 +54,17 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
         await PlatformService.deleteSlipImage(slip.imagePath);
         await DatabaseService.deletePaymentSlip(slip.id!);
         await _loadSlips();
-        
+
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Slip deleted successfully')),
-          );
+          ShadSonner.of(
+            context,
+          ).show(const ShadToast(title: Text('Success'), description: Text('Slip deleted successfully')));
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error deleting slip: $e')),
-          );
+          ShadSonner.of(
+            context,
+          ).show(ShadToast(title: const Text('Error'), description: Text('Error deleting slip: $e')));
         }
       }
     }
@@ -78,13 +72,16 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = ShadTheme.of(context);
     final monthName = DateFormat('MMMM yyyy').format(widget.month);
-    
+
     return Scaffold(
       appBar: AppBar(
         title: Text(monthName),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        backgroundColor: theme.colorScheme.background,
+        foregroundColor: theme.colorScheme.foreground,
       ),
+      backgroundColor: theme.colorScheme.background,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(
@@ -92,70 +89,104 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
                 // Summary Card
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(16.0),
-                  color: Theme.of(context).colorScheme.primaryContainer,
+                  padding: const EdgeInsets.all(24.0),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                    border: Border(bottom: BorderSide(color: theme.colorScheme.border, width: 1)),
+                  ),
                   child: Column(
                     children: [
-                      Text(
-                        'Total Spending',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
+                      Text('Total Spending', style: theme.textTheme.large),
                       const SizedBox(height: 8),
                       Text(
                         '\$${_totalAmount.toStringAsFixed(2)}',
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        style: theme.textTheme.h1.copyWith(
                           fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
                         ),
                       ),
-                      Text(
-                        '${_slips.length} slip${_slips.length != 1 ? 's' : ''}',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
+                      Text('${_slips.length} slip${_slips.length != 1 ? 's' : ''}', style: theme.textTheme.muted),
                     ],
                   ),
                 ),
-                
+
                 // Slips List
                 Expanded(
                   child: _slips.isEmpty
-                      ? const Center(
-                          child: Text('No payment slips for this month'),
-                        )
+                      ? Center(child: Text('No payment slips for this month', style: theme.textTheme.muted))
                       : ListView.builder(
                           padding: const EdgeInsets.all(8.0),
                           itemCount: _slips.length,
                           itemBuilder: (context, index) {
                             final slip = _slips[index];
-                            return Card(
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: Theme.of(context).primaryColor,
-                                  child: Text(
-                                    '\$',
-                                    style: TextStyle(
-                                      color: Theme.of(context).colorScheme.onPrimary,
-                                    ),
-                                  ),
-                                ),
-                                title: Text(
-                                  '\$${slip.amount.toStringAsFixed(2)}',
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                                subtitle: Text(
-                                  DateFormat('MMM dd, yyyy').format(slip.date),
-                                ),
-                                trailing: IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.red),
-                                  onPressed: () => _deleteSlip(slip),
-                                ),
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8.0),
+                              child: GestureDetector(
                                 onTap: () {
                                   Navigator.push(
                                     context,
-                                    MaterialPageRoute(
-                                      builder: (context) => SlipDetailScreen(slip: slip),
-                                    ),
+                                    MaterialPageRoute(builder: (context) => SlipDetailScreen(slip: slip)),
                                   ).then((_) => _loadSlips());
                                 },
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.card,
+                                    border: Border.all(color: theme.colorScheme.border),
+                                    borderRadius: theme.radius,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 40,
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          color: theme.colorScheme.primary,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            '\$',
+                                            style: TextStyle(
+                                              color: theme.colorScheme.primaryForeground,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 18,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '\$${slip.amount.toStringAsFixed(2)}',
+                                              style: theme.textTheme.large.copyWith(fontWeight: FontWeight.bold),
+                                            ),
+                                            Text(
+                                              DateFormat('MMM dd, yyyy').format(slip.date),
+                                              style: theme.textTheme.muted,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      ShadButton.destructive(
+                                        size: ShadButtonSize.sm,
+                                        onPressed: () => _deleteSlip(slip),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(LucideIcons.trash2, size: 16),
+                                            const SizedBox(width: 4),
+                                            const Text('Delete'),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             );
                           },
