@@ -1,8 +1,89 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import '../services/platform_service.dart';
 import '../services/database_service.dart';
 import '../models/payment_slip.dart';
+
+/// Top-level function for isolate - must be outside class
+List<PaymentSlip> convertSlipsInIsolate(List<dynamic> slips) {
+  return slips.map((slip) {
+    final slipData = Map<String, dynamic>.from(slip);
+
+    // Parse date
+    DateTime slipDate = DateTime.now();
+    if (slipData['date'] != null && slipData['date'].toString().isNotEmpty) {
+      slipDate = _parseThaiDateInIsolate(slipData['date']) ?? DateTime.now();
+    }
+
+    // Parse amount
+    double amount = 0.0;
+    if (slipData['amount'] != null) {
+      if (slipData['amount'] is int) {
+        amount = (slipData['amount'] as int).toDouble();
+      } else if (slipData['amount'] is double) {
+        amount = slipData['amount'] as double;
+      } else {
+        amount = double.tryParse(slipData['amount'].toString()) ?? 0.0;
+      }
+    }
+
+    return PaymentSlip(
+      imagePath: slipData['assetId'] ?? '',
+      assetId: slipData['assetId'],
+      amount: amount,
+      date: slipDate,
+      extractedText: slipData['text'] ?? '',
+      createdAt: DateTime.now(),
+    );
+  }).toList();
+}
+
+/// Parse Thai date - standalone function for isolate
+DateTime? _parseThaiDateInIsolate(String dateStr) {
+  try {
+    // Handle already converted dates (from iOS helper)
+    if (dateStr.contains('/')) {
+      List<String> parts = dateStr.split('/');
+      if (parts.length == 3) {
+        // Check if it's already in DD/MM/YYYY format from iOS conversion
+        if (parts[2].length == 4) {
+          return DateTime(
+            int.parse(parts[2]), // Year
+            int.parse(parts[1]), // Month
+            int.parse(parts[0]), // Day
+          );
+        }
+      }
+    }
+
+    // Handle hyphen-separated dates
+    if (dateStr.contains('-')) {
+      List<String> parts = dateStr.split('-');
+      if (parts.length == 3) {
+        if (parts[0].length == 4) {
+          // YYYY-MM-DD
+          return DateTime(
+            int.parse(parts[0]),
+            int.parse(parts[1]),
+            int.parse(parts[2]),
+          );
+        } else {
+          // DD-MM-YYYY
+          return DateTime(
+            int.parse(parts[2]),
+            int.parse(parts[1]),
+            int.parse(parts[0]),
+          );
+        }
+      }
+    }
+  } catch (e) {
+    // If parsing fails, return null to use current date
+  }
+
+  return null;
+}
 
 class ScanningProgressScreen extends StatefulWidget {
   const ScanningProgressScreen({super.key});
@@ -20,7 +101,7 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
   int _slipsFound = 0;
   bool _isComplete = false;
   String? _error;
-  List<Map<String, dynamic>> _accumulatedSlips = [];
+  final List<Map<String, dynamic>> _accumulatedSlips = [];
 
   @override
   void initState() {
@@ -43,10 +124,9 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
 
   void _startScanning() async {
     try {
-      final result = await PlatformService.scanAllPhotos();
-      
-      // Process the final results (which may be empty if using streaming)
-      await _processFinalResults(result);
+      // Fire and forget - don't await! iOS returns immediately
+      // Completion is detected via progress stream (isComplete: true)
+      PlatformService.startScanning();
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -60,17 +140,29 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
   void _listenToProgress() {
     _progressSubscription = PlatformService.getProgressStream().listen(
       (progress) {
-        print('📊 DEBUG Flutter UI: Progress listener received: $progress');
         if (mounted) {
-          setState(() {
-            _totalPhotos = progress['total'] ?? 0;
-            _processedPhotos = progress['processed'] ?? 0;
-            _slipsFound = progress['slipsFound'] ?? 0;
-            _isComplete = progress['isComplete'] ?? false;
-            print('📊 DEBUG Flutter UI: Updated state - $_processedPhotos/$_totalPhotos, slips: $_slipsFound');
-          });
-        } else {
-          print('📊 DEBUG Flutter UI: Widget not mounted, skipping update');
+          final newTotal = progress['total'] ?? 0;
+          final newProcessed = progress['processed'] ?? 0;
+          final newSlipsFound = progress['slipsFound'] ?? 0;
+          final newIsComplete = progress['isComplete'] ?? false;
+
+          // Only rebuild if values actually changed
+          if (newTotal != _totalPhotos ||
+              newProcessed != _processedPhotos ||
+              newSlipsFound != _slipsFound ||
+              newIsComplete != _isComplete) {
+            setState(() {
+              _totalPhotos = newTotal;
+              _processedPhotos = newProcessed;
+              _slipsFound = newSlipsFound;
+              _isComplete = newIsComplete;
+            });
+          }
+
+          // Handle completion via stream instead of awaiting result
+          if (newIsComplete && _isScanning) {
+            _handleScanComplete();
+          }
         }
       },
       onError: (error) {
@@ -87,48 +179,35 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
   void _listenToPartialResults() {
     _partialResultsSubscription = PlatformService.getPartialResultsStream().listen(
       (partialData) {
-        print('📦 DEBUG Flutter UI: Partial results received: ${partialData['slips']?.length ?? 0} slips');
         if (mounted) {
           final slips = partialData['slips'] as List<dynamic>? ?? [];
           for (final slip in slips) {
             _accumulatedSlips.add(Map<String, dynamic>.from(slip));
           }
-          print('📦 DEBUG Flutter UI: Total accumulated slips: ${_accumulatedSlips.length}');
         }
       },
       onError: (error) {
-        print('📦 ERROR Flutter UI: Partial results error: $error');
+        // Silently handle partial results errors
       },
     );
   }
 
-  Future<void> _processFinalResults(Map<String, dynamic> result) async {
+  /// Handle scan completion - called when progress stream sends isComplete: true
+  Future<void> _handleScanComplete() async {
     try {
-      // Use accumulated slips from partial results, fallback to final result slips
-      List<dynamic> allSlips = _accumulatedSlips.isNotEmpty 
-          ? _accumulatedSlips 
-          : (result['slips'] as List<dynamic>? ?? []);
-      
-      print('🔍 DEBUG Flutter: Processing ${allSlips.length} total slips (${_accumulatedSlips.length} from chunks, ${(result['slips'] as List<dynamic>? ?? []).length} from final)');
-      
-      if (allSlips.isNotEmpty) {
-        final paymentSlips = allSlips.map((slip) => _convertToPaymentSlip(slip)).toList();
-        
-        // Save to database in batch
+      // Process accumulated slips from partial results in background isolate
+      if (_accumulatedSlips.isNotEmpty) {
+        final paymentSlips = await compute(convertSlipsInIsolate, _accumulatedSlips);
         await DatabaseService.insertPaymentSlipsBatch(paymentSlips);
-        print('✅ DEBUG Flutter: Saved ${paymentSlips.length} payment slips to database');
       }
-      
+
       if (mounted) {
         setState(() {
           _isScanning = false;
         });
-        
+
         // Show completion dialog and navigate back
-        _showCompletionDialog(
-          result['processed'] ?? _processedPhotos, 
-          result['slipsFound'] ?? allSlips.length
-        );
+        _showCompletionDialog(_processedPhotos, _slipsFound);
       }
     } catch (e) {
       if (mounted) {
@@ -138,89 +217,6 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
         });
       }
     }
-  }
-
-  PaymentSlip _convertToPaymentSlip(dynamic slip) {
-    final slipData = Map<String, dynamic>.from(slip);
-    
-    print('🔍 DEBUG Flutter: Raw slip data: $slipData');
-    print('🔍 DEBUG Flutter: Amount from iOS: ${slipData['amount']} (type: ${slipData['amount'].runtimeType})');
-    print('🔍 DEBUG Flutter: Date from iOS: ${slipData['date']}');
-    print('🔍 DEBUG Flutter: Text from iOS: ${slipData['text']}');
-    
-    DateTime slipDate = DateTime.now();
-    if (slipData['date'] != null && slipData['date'].toString().isNotEmpty) {
-      slipDate = _parseThaiDate(slipData['date']) ?? DateTime.now();
-      print('🔍 DEBUG Flutter: Parsed date: $slipDate');
-    }
-    
-    double amount = 0.0;
-    if (slipData['amount'] != null) {
-      if (slipData['amount'] is int) {
-        amount = (slipData['amount'] as int).toDouble();
-      } else if (slipData['amount'] is double) {
-        amount = slipData['amount'] as double;
-      } else {
-        // Try to parse as string
-        amount = double.tryParse(slipData['amount'].toString()) ?? 0.0;
-      }
-    }
-    
-    print('🔍 DEBUG Flutter: Final amount: $amount');
-    
-    return PaymentSlip(
-      imagePath: slipData['assetId'] ?? '',
-      assetId: slipData['assetId'],
-      amount: amount,
-      date: slipDate,
-      extractedText: slipData['text'] ?? '',
-      createdAt: DateTime.now(),
-    );
-  }
-
-  DateTime? _parseThaiDate(String dateStr) {
-    try {
-      // Handle already converted dates (from iOS helper)
-      if (dateStr.contains('/')) {
-        List<String> parts = dateStr.split('/');
-        if (parts.length == 3) {
-          // Check if it's already in DD/MM/YYYY format from iOS conversion
-          if (parts[2].length == 4) {
-            return DateTime(
-              int.parse(parts[2]), // Year
-              int.parse(parts[1]), // Month
-              int.parse(parts[0]), // Day
-            );
-          }
-        }
-      }
-      
-      // Handle hyphen-separated dates
-      if (dateStr.contains('-')) {
-        List<String> parts = dateStr.split('-');
-        if (parts.length == 3) {
-          if (parts[0].length == 4) {
-            // YYYY-MM-DD
-            return DateTime(
-              int.parse(parts[0]),
-              int.parse(parts[1]),
-              int.parse(parts[2]),
-            );
-          } else {
-            // DD-MM-YYYY
-            return DateTime(
-              int.parse(parts[2]),
-              int.parse(parts[1]),
-              int.parse(parts[0]),
-            );
-          }
-        }
-      }
-    } catch (e) {
-      // If parsing fails, return null to use current date
-    }
-    
-    return null;
   }
 
   void _showCompletionDialog(int processed, int found) {
@@ -354,20 +350,20 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
                   ],
                 ),
               ),
-              
+
               const SizedBox(height: 32),
-              
+
               // Status text
               Text(
-                _isScanning 
+                _isScanning
                     ? 'Scanning your photos for payment slips...'
                     : 'Processing results...',
                 style: Theme.of(context).textTheme.titleMedium,
                 textAlign: TextAlign.center,
               ),
-              
+
               const SizedBox(height: 24),
-              
+
               // Progress stats
               Card(
                 child: Padding(
@@ -402,9 +398,9 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 32),
-              
+
               // Cancel button
               if (_isScanning)
                 OutlinedButton(

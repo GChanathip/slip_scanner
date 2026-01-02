@@ -2,6 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+# Important
+This project focus on iOS only ignore android implementation for now
+
 ## Project Overview
 
 This is a Flutter iOS app that automatically scans payment slips from device photos using Apple Vision Framework OCR. The app specializes in Thai banking slips with support for Thai language text recognition, Buddhist calendar conversion, and comma-separated number formatting.
@@ -42,7 +45,8 @@ Flutter UI → Platform Service → iOS AppDelegate → Vision Framework → Pro
 
 ### iOS Native Implementation (AppDelegate.swift)
 - **OCR Engine**: Apple Vision Framework with `th-TH` and `en-US` language support
-- **Batch Processing**: Processes photos in groups of 20 with throttled progress updates
+- **Batch Processing**: Processes photos in chunks of 100 with max 8 concurrent tasks via Swift TaskGroup
+- **Thread Safety**: Uses Swift `actor ScanProgressTracker` for concurrent state management
 - **Thai Banking Patterns**: Prioritized regex patterns for SCB, KBank, and general Thai banking formats
 - **Buddhist Calendar**: Automatic conversion from Buddhist Era (BE) to Gregorian years
 
@@ -88,14 +92,31 @@ payment_slips: id, imagePath, assetId, amount, date, extractedText, createdAt
 lib/
 ├── models/payment_slip.dart          # Data model with toMap/fromMap
 ├── services/
-│   ├── platform_service.dart        # Flutter-iOS bridge
+│   ├── platform_service.dart        # Flutter-iOS bridge with stream management
 │   └── database_service.dart        # SQLite operations with batch inserts
 ├── screens/
 │   ├── home_screen.dart             # Main UI with monthly summaries
 │   ├── scanning_progress_screen.dart # Real-time progress during scanning
-│   └── monthly_view_screen.dart      # Monthly spending details
+│   ├── monthly_view_screen.dart      # Monthly spending details
+│   └── slip_detail_screen.dart       # Individual slip inspection
 ios/Runner/AppDelegate.swift          # All iOS OCR logic and Vision Framework integration
 ```
+
+## Stream Architecture
+
+The app uses dual streams for real-time updates during scanning:
+
+```dart
+// Progress updates: {total, processed, slipsFound, isComplete}
+PlatformService.getProgressStream()
+
+// Partial results: streamed every 100 slips processed
+PlatformService.getPartialResultsStream()
+```
+
+**iOS sends updates via method channel callbacks:**
+- `onProgress` - Progress percentage and counts
+- `onPartialResults` - Batch of slip data with `{text, amount, date, assetId, createdAt}`
 
 ## Testing Thai Banking Slips
 
