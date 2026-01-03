@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import '../models/payment_slip.dart';
 import '../services/database_service.dart';
+import '../providers/scanning_provider.dart';
 import 'monthly_view_screen.dart';
 import 'slip_detail_screen.dart';
 import 'scanning_progress_screen.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   List<PaymentSlip> _recentSlips = [];
   Map<String, double> _monthlyTotals = {};
   bool _isLoading = false;
@@ -49,6 +51,25 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _startScanAllPhotos() async {
+    // Check if already scanning
+    final scanningState = ref.read(scanningProvider);
+    if (scanningState.isScanning) {
+      // Already scanning - just navigate to progress screen
+      if (mounted) {
+        final result = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(builder: (context) => const ScanningProgressScreen()),
+        );
+
+        // Refresh data if scanning completed successfully
+        if (result == true) {
+          await _loadData();
+          await _checkIfScannedBefore();
+        }
+      }
+      return;
+    }
+
     // Check photo library permission
     PermissionStatus status = await Permission.photos.status;
 
@@ -95,12 +116,36 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final theme = ShadTheme.of(context);
     final currentMonthTotal = _monthlyTotals[DateFormat('yyyy-MM').format(DateTime.now())] ?? 0.0;
+    final scanningState = ref.watch(scanningProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Payment Slip Scanner'),
         backgroundColor: theme.colorScheme.background,
         foregroundColor: theme.colorScheme.foreground,
+        actions: [
+          // Show scanning indicator if scanning in background
+          if (scanningState.isScanning)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Center(
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text('Scanning...', style: theme.textTheme.small),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
       backgroundColor: theme.colorScheme.background,
       body: _isLoading

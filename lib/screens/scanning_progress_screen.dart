@@ -1,215 +1,183 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-import 'dart:async';
-import '../services/platform_service.dart';
-import '../services/database_service.dart';
-import '../models/payment_slip.dart';
+import '../providers/scanning_provider.dart';
+import '../providers/scanning_state.dart';
 
-/// Top-level function for isolate - must be outside class
-List<PaymentSlip> convertSlipsInIsolate(List<dynamic> slips) {
-  return slips.map((slip) {
-    final slipData = Map<String, dynamic>.from(slip);
-
-    // Parse date
-    DateTime slipDate = DateTime.now();
-    if (slipData['date'] != null && slipData['date'].toString().isNotEmpty) {
-      slipDate = _parseThaiDateInIsolate(slipData['date']) ?? DateTime.now();
-    }
-
-    // Parse amount
-    double amount = 0.0;
-    if (slipData['amount'] != null) {
-      if (slipData['amount'] is int) {
-        amount = (slipData['amount'] as int).toDouble();
-      } else if (slipData['amount'] is double) {
-        amount = slipData['amount'] as double;
-      } else {
-        amount = double.tryParse(slipData['amount'].toString()) ?? 0.0;
-      }
-    }
-
-    return PaymentSlip(
-      imagePath: slipData['assetId'] ?? '',
-      assetId: slipData['assetId'],
-      amount: amount,
-      date: slipDate,
-      extractedText: slipData['text'] ?? '',
-      createdAt: DateTime.now(),
-    );
-  }).toList();
-}
-
-/// Parse Thai date - standalone function for isolate
-DateTime? _parseThaiDateInIsolate(String dateStr) {
-  try {
-    // Handle already converted dates (from iOS helper)
-    if (dateStr.contains('/')) {
-      List<String> parts = dateStr.split('/');
-      if (parts.length == 3) {
-        // Check if it's already in DD/MM/YYYY format from iOS conversion
-        if (parts[2].length == 4) {
-          return DateTime(
-            int.parse(parts[2]), // Year
-            int.parse(parts[1]), // Month
-            int.parse(parts[0]), // Day
-          );
-        }
-      }
-    }
-
-    // Handle hyphen-separated dates
-    if (dateStr.contains('-')) {
-      List<String> parts = dateStr.split('-');
-      if (parts.length == 3) {
-        if (parts[0].length == 4) {
-          // YYYY-MM-DD
-          return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
-        } else {
-          // DD-MM-YYYY
-          return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
-        }
-      }
-    }
-  } catch (e) {
-    // If parsing fails, return null to use current date
-  }
-
-  return null;
-}
-
-class ScanningProgressScreen extends StatefulWidget {
+class ScanningProgressScreen extends ConsumerStatefulWidget {
   const ScanningProgressScreen({super.key});
 
   @override
-  State<ScanningProgressScreen> createState() => _ScanningProgressScreenState();
+  ConsumerState<ScanningProgressScreen> createState() => _ScanningProgressScreenState();
 }
 
-class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
-  late StreamSubscription _progressSubscription;
-  late StreamSubscription _partialResultsSubscription;
-  bool _isScanning = true;
-  int _totalPhotos = 0;
-  int _processedPhotos = 0;
-  int _slipsFound = 0;
-  bool _isComplete = false;
-  String? _error;
-  final List<Map<String, dynamic>> _accumulatedSlips = [];
-
+class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen> {
   @override
   void initState() {
     super.initState();
-    // Initialize progress and partial results listening BEFORE starting scanning
-    _listenToProgress();
-    _listenToPartialResults();
-    // Small delay to ensure channels are set up
-    Future.delayed(const Duration(milliseconds: 100), () {
-      _startScanning();
+
+    // Listen for completion - fires immediately if already complete, then on changes
+    // This replaces the hacky _hasShownCompletionDialog flag pattern
+    ref.listenManual(scanningProvider.select((state) => state.isComplete), (previous, isComplete) {
+      if (isComplete) {
+        // Schedule dialog for after the current frame to ensure context is ready
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            final state = ref.read(scanningProvider);
+            _showCompletionDialog(state.processedPhotos, state.slipsFound);
+          }
+        });
+      }
+    }, fireImmediately: true);
+
+    // Start scanning - provider handles all state checks
+    Future.microtask(() {
+      ref.read(scanningProvider.notifier).startScanning();
     });
   }
 
   @override
-  void dispose() {
-    _progressSubscription.cancel();
-    _partialResultsSubscription.cancel();
-    super.dispose();
-  }
+  Widget build(BuildContext context) {
+    final theme = ShadTheme.of(context);
+    final scanningState = ref.watch(scanningProvider);
 
-  void _startScanning() async {
-    try {
-      // Fire and forget - don't await! iOS returns immediately
-      // Completion is detected via progress stream (isComplete: true)
-      PlatformService.startScanning();
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.toString();
-          _isScanning = false;
-        });
-      }
+    if (scanningState.error != null) {
+      return _buildErrorView(theme, scanningState.error!);
     }
+
+    return _buildProgressView(theme, scanningState);
   }
 
-  void _listenToProgress() {
-    _progressSubscription = PlatformService.getProgressStream().listen(
-      (progress) {
-        if (mounted) {
-          final newTotal = progress['total'] ?? 0;
-          final newProcessed = progress['processed'] ?? 0;
-          final newSlipsFound = progress['slipsFound'] ?? 0;
-          final newIsComplete = progress['isComplete'] ?? false;
-
-          // Only rebuild if values actually changed
-          if (newTotal != _totalPhotos ||
-              newProcessed != _processedPhotos ||
-              newSlipsFound != _slipsFound ||
-              newIsComplete != _isComplete) {
-            setState(() {
-              _totalPhotos = newTotal;
-              _processedPhotos = newProcessed;
-              _slipsFound = newSlipsFound;
-              _isComplete = newIsComplete;
-            });
-          }
-
-          // Handle completion via stream instead of awaiting result
-          if (newIsComplete && _isScanning) {
-            _handleScanComplete();
-          }
-        }
-      },
-      onError: (error) {
-        if (mounted) {
-          setState(() {
-            _error = error.toString();
-            _isScanning = false;
-          });
-        }
-      },
+  Widget _buildErrorView(ShadThemeData theme, String error) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Scanning Error'),
+        backgroundColor: theme.colorScheme.background,
+        foregroundColor: theme.colorScheme.foreground,
+      ),
+      backgroundColor: theme.colorScheme.background,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(LucideIcons.circleAlert, size: 64, color: theme.colorScheme.destructive),
+              const SizedBox(height: 16),
+              Text('Scanning Failed', style: theme.textTheme.h2),
+              const SizedBox(height: 8),
+              Text(error, textAlign: TextAlign.center, style: theme.textTheme.muted),
+              const SizedBox(height: 24),
+              ShadButton(
+                onPressed: () {
+                  ref.read(scanningProvider.notifier).reset();
+                  Navigator.of(context).pop(false);
+                },
+                child: const Text('Go Back'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  void _listenToPartialResults() {
-    _partialResultsSubscription = PlatformService.getPartialResultsStream().listen(
-      (partialData) {
-        if (mounted) {
-          final slips = partialData['slips'] as List<dynamic>? ?? [];
-          for (final slip in slips) {
-            _accumulatedSlips.add(Map<String, dynamic>.from(slip));
-          }
-        }
-      },
-      onError: (error) {
-        // Silently handle partial results errors
-      },
+  Widget _buildProgressView(ShadThemeData theme, ScanningState scanningState) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Scanning Photos'),
+        backgroundColor: theme.colorScheme.background,
+        foregroundColor: theme.colorScheme.foreground,
+        leading: ShadIconButton(
+          icon: const Icon(LucideIcons.x),
+          onPressed: scanningState.isScanning ? _cancelScanning : () => Navigator.of(context).pop(false),
+        ),
+      ),
+      backgroundColor: theme.colorScheme.background,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildProgressCircle(theme, scanningState),
+              const SizedBox(height: 32),
+              Text(
+                scanningState.isScanning ? 'Scanning your photos for payment slips...' : 'Processing results...',
+                style: theme.textTheme.large,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              _buildStatsCard(theme, scanningState),
+              const SizedBox(height: 32),
+              if (scanningState.isScanning)
+                ShadButton.outline(onPressed: _cancelScanning, child: const Text('Cancel Scanning')),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  /// Handle scan completion - called when progress stream sends isComplete: true
-  Future<void> _handleScanComplete() async {
-    try {
-      // Process accumulated slips from partial results in background isolate
-      if (_accumulatedSlips.isNotEmpty) {
-        final paymentSlips = await compute(convertSlipsInIsolate, _accumulatedSlips);
-        await DatabaseService.insertPaymentSlipsBatch(paymentSlips);
-      }
+  Widget _buildProgressCircle(ShadThemeData theme, ScanningState scanningState) {
+    final progress = scanningState.progress;
+    return SizedBox(
+      width: 120,
+      height: 120,
+      child: Stack(
+        children: [
+          CircularProgressIndicator(
+            value: scanningState.isScanning ? progress : 1.0,
+            strokeWidth: 8,
+            backgroundColor: theme.colorScheme.muted,
+            valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
+          ),
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('${(progress * 100).toInt()}%', style: theme.textTheme.h2.copyWith(fontWeight: FontWeight.bold)),
+                if (scanningState.isScanning) Text('Scanning', style: theme.textTheme.small),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-      if (mounted) {
-        setState(() {
-          _isScanning = false;
-        });
-
-        // Show completion dialog and navigate back
-        _showCompletionDialog(_processedPhotos, _slipsFound);
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = 'Failed to save results: $e';
-          _isScanning = false;
-        });
-      }
-    }
+  Widget _buildStatsCard(ShadThemeData theme, ScanningState scanningState) {
+    return ShadCard(
+      width: double.infinity,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Photos Processed:'),
+                Text(
+                  '${scanningState.processedPhotos} / ${scanningState.totalPhotos}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Payment Slips Found:'),
+                Text(
+                  '${scanningState.slipsFound}',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showCompletionDialog(int processed, int found) {
@@ -222,6 +190,7 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
           ShadButton(
             onPressed: () {
               Navigator.of(context).pop(); // Close dialog
+              ref.read(scanningProvider.notifier).reset();
               Navigator.of(context).pop(true); // Return to home with refresh signal
             },
             child: const Text('OK'),
@@ -233,11 +202,8 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
 
   void _cancelScanning() async {
     try {
-      await PlatformService.cancelScanning();
+      await ref.read(scanningProvider.notifier).cancelScanning();
       if (mounted) {
-        setState(() {
-          _isScanning = false;
-        });
         Navigator.of(context).pop(false);
       }
     } catch (e) {
@@ -245,139 +211,5 @@ class _ScanningProgressScreenState extends State<ScanningProgressScreen> {
         ShadSonner.of(context).show(ShadToast(title: const Text('Error'), description: Text('Failed to cancel: $e')));
       }
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = ShadTheme.of(context);
-
-    if (_error != null) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Scanning Error'),
-          backgroundColor: theme.colorScheme.background,
-          foregroundColor: theme.colorScheme.foreground,
-        ),
-        backgroundColor: theme.colorScheme.background,
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(LucideIcons.circleAlert, size: 64, color: theme.colorScheme.destructive),
-                const SizedBox(height: 16),
-                Text('Scanning Failed', style: theme.textTheme.h2),
-                const SizedBox(height: 8),
-                Text(_error!, textAlign: TextAlign.center, style: theme.textTheme.muted),
-                const SizedBox(height: 24),
-                ShadButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Go Back')),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    final progress = _totalPhotos > 0 ? _processedPhotos / _totalPhotos : 0.0;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Scanning Photos'),
-        backgroundColor: theme.colorScheme.background,
-        foregroundColor: theme.colorScheme.foreground,
-        leading: ShadIconButton(
-          icon: const Icon(LucideIcons.x),
-          onPressed: _isScanning ? _cancelScanning : () => Navigator.of(context).pop(false),
-        ),
-      ),
-      backgroundColor: theme.colorScheme.background,
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Progress circle
-              SizedBox(
-                width: 120,
-                height: 120,
-                child: Stack(
-                  children: [
-                    CircularProgressIndicator(
-                      value: _isScanning ? progress : 1.0,
-                      strokeWidth: 8,
-                      backgroundColor: theme.colorScheme.muted,
-                      valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
-                    ),
-                    Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            '${(_processedPhotos / (_totalPhotos == 0 ? 1 : _totalPhotos) * 100).toInt()}%',
-                            style: theme.textTheme.h2.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          if (_isScanning) Text('Scanning', style: theme.textTheme.small),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Status text
-              Text(
-                _isScanning ? 'Scanning your photos for payment slips...' : 'Processing results...',
-                style: theme.textTheme.large,
-                textAlign: TextAlign.center,
-              ),
-
-              const SizedBox(height: 24),
-
-              // Progress stats
-              ShadCard(
-                width: double.infinity,
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Photos Processed:'),
-                          Text(
-                            '$_processedPhotos / $_totalPhotos',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Payment Slips Found:'),
-                          Text(
-                            '$_slipsFound',
-                            style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Cancel button
-              if (_isScanning) ShadButton.outline(onPressed: _cancelScanning, child: const Text('Cancel Scanning')),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
