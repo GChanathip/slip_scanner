@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'router/app_router.dart';
+import 'package:cactus/cactus.dart';
 
 void main() {
+  CactusConfig.setTelemetryToken('f048d96d-ab22-41ed-b5c1-8226b3300315');
   runApp(const ProviderScope(child: MyApp()));
 }
 

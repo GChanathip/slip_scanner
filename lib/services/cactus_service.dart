@@ -1,13 +1,23 @@
+import 'dart:async';
 import 'package:cactus/cactus.dart';
+import 'package:flutter/foundation.dart';
 
 /// Singleton service managing CactusLM and CactusRAG lifecycle.
 /// Handles model download, initialization, and cleanup.
+///
+/// IMPORTANT: CactusLM is NOT thread-safe. All LLM operations must be
+/// serialized using the _operationLock to prevent concurrent access
+/// which causes EXC_BAD_ACCESS crashes in the native layer.
 class CactusService {
   static CactusService? _instance;
   CactusLM? _lm;
   CactusRAG? _rag;
   String? _currentModel;
   bool _isModelLoaded = false;
+
+  /// Lock to serialize all LLM operations (completions, embeddings)
+  /// This prevents concurrent access to the native model which is not thread-safe
+  final _operationLock = _AsyncLock();
 
   static CactusService get instance => _instance ??= CactusService._();
   CactusService._();
@@ -39,11 +49,12 @@ class CactusService {
     _isModelLoaded = true;
 
     // Initialize RAG with embedding generator
+    // IMPORTANT: Use the locked generateEmbedding method, not direct _lm! access
     _rag = CactusRAG();
     await _rag!.initialize();
     _rag!.setEmbeddingGenerator((text) async {
-      final result = await _lm!.generateEmbedding(text: text);
-      return result.embeddings;
+      // This goes through the lock to prevent concurrent native access
+      return await generateEmbedding(text);
     });
     _rag!.setChunking(chunkSize: 512, chunkOverlap: 64);
   }
@@ -62,24 +73,67 @@ class CactusService {
   }
 
   /// Generate completion (for chat)
+  /// Serialized via lock to prevent concurrent native access
   Future<CactusCompletionResult> generateCompletion(List<ChatMessage> messages) async {
     if (!_isModelLoaded) throw Exception('Model not loaded');
-    return await _lm!.generateCompletion(messages: messages);
+    return await _operationLock.synchronized(() async {
+      debugPrint('🔒 Acquiring lock for generateCompletion');
+      final result = await _lm!.generateCompletion(messages: messages);
+      debugPrint('🔓 Released lock for generateCompletion');
+      return result;
+    });
   }
 
   /// Stream completion (for chat UI)
+  /// Note: We acquire lock at start but streaming happens async
+  /// Caller must ensure no other LLM operations during stream consumption
   Future<CactusStreamedCompletionResult> generateCompletionStream(
     List<ChatMessage> messages,
   ) async {
     if (!_isModelLoaded) throw Exception('Model not loaded');
-    return await _lm!.generateCompletionStream(messages: messages);
+    // For streaming, we need to hold the lock during the entire stream
+    // We'll acquire it here and release when the stream is done
+    await _operationLock.acquire();
+    debugPrint('🔒 Acquired lock for generateCompletionStream');
+    try {
+      final streamResult = await _lm!.generateCompletionStream(messages: messages);
+      // Wrap the stream to release lock when done
+      final wrappedStream = streamResult.stream.transform(
+        StreamTransformer<String, String>.fromHandlers(
+          handleData: (data, sink) => sink.add(data),
+          handleDone: (sink) {
+            debugPrint('🔓 Releasing lock after stream done');
+            _operationLock.release();
+            sink.close();
+          },
+          handleError: (error, stackTrace, sink) {
+            debugPrint('🔓 Releasing lock after stream error');
+            _operationLock.release();
+            sink.addError(error, stackTrace);
+          },
+        ),
+      );
+      return CactusStreamedCompletionResult(
+        stream: wrappedStream,
+        result: streamResult.result,
+      );
+    } catch (e) {
+      debugPrint('🔓 Releasing lock after stream setup error');
+      _operationLock.release();
+      rethrow;
+    }
   }
 
   /// Generate embedding for text
+  /// Serialized via lock to prevent concurrent native access
   Future<List<double>> generateEmbedding(String text) async {
     if (!_isModelLoaded) throw Exception('Model not loaded');
-    final result = await _lm!.generateEmbedding(text: text);
-    return result.embeddings;
+    return await _operationLock.synchronized(() async {
+      debugPrint('🔒 Acquiring lock for generateEmbedding: ${text.substring(0, text.length > 30 ? 30 : text.length)}...');
+      final result = await _lm!.generateEmbedding(text: text);
+      debugPrint('🔓 Released lock for generateEmbedding');
+      return result.embeddings;
+    });
   }
 
   /// Store document in RAG
@@ -116,8 +170,8 @@ class CactusService {
       _rag = CactusRAG();
       await _rag!.initialize();
       _rag!.setEmbeddingGenerator((text) async {
-        final result = await _lm!.generateEmbedding(text: text);
-        return result.embeddings;
+        // This goes through the lock to prevent concurrent native access
+        return await generateEmbedding(text);
       });
       _rag!.setChunking(chunkSize: 512, chunkOverlap: 64);
     }
@@ -127,5 +181,39 @@ class CactusService {
   Future<DatabaseStats?> getRAGStats() async {
     if (_rag == null) return null;
     return await _rag!.getStats();
+  }
+}
+
+/// Simple async mutex lock to serialize async operations.
+/// Used to prevent concurrent access to non-thread-safe native code.
+class _AsyncLock {
+  Completer<void>? _completer;
+
+  /// Returns true if the lock is currently held
+  bool get isLocked => _completer != null;
+
+  /// Acquire the lock. If already held, wait until released.
+  Future<void> acquire() async {
+    while (_completer != null) {
+      await _completer!.future;
+    }
+    _completer = Completer<void>();
+  }
+
+  /// Release the lock
+  void release() {
+    final completer = _completer;
+    _completer = null;
+    completer?.complete();
+  }
+
+  /// Execute a function while holding the lock
+  Future<T> synchronized<T>(Future<T> Function() fn) async {
+    await acquire();
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
   }
 }

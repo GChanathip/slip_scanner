@@ -25,6 +25,9 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
+  // Store notifier reference to avoid using ref in dispose
+  ExtractionQueue? _extractionNotifier;
+  bool _wasModelLoaded = false;
 
   @override
   void initState() {
@@ -35,6 +38,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ref.read(chatProvider.notifier).setDateRange(widget.startDate, widget.endDate);
       });
     }
+    // Pause background extraction while chatting to avoid lock contention
+    // This makes the chat feel more responsive
+    Future.microtask(() {
+      _extractionNotifier = ref.read(extractionQueueProvider.notifier);
+      _extractionNotifier?.stopBackgroundProcessing();
+    });
     // Ensure model is loaded
     _ensureModelLoaded();
   }
@@ -44,8 +53,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (!cactusState.isModelLoaded && !cactusState.isLoading) {
       await ref.read(cactusProvider.notifier).downloadAndInitialize(cactusState.selectedModel);
       if (ref.read(cactusProvider).isModelLoaded) {
-        ref.read(extractionQueueProvider.notifier).startBackgroundProcessing();
+        _wasModelLoaded = true;
+        // Don't start extraction here - we're in chat mode
       }
+    } else if (cactusState.isModelLoaded) {
+      _wasModelLoaded = true;
     }
   }
 
@@ -53,6 +65,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
+    // Resume background extraction when leaving chat
+    // Use cached notifier reference to avoid using ref in dispose
+    if (_wasModelLoaded && _extractionNotifier != null) {
+      _extractionNotifier!.startBackgroundProcessing();
+    }
     super.dispose();
   }
 
