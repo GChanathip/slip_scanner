@@ -1,10 +1,12 @@
+import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import '../models/payment_slip.dart';
+import '../router/app_router.dart';
 import '../services/database_service.dart';
 import '../services/platform_service.dart';
-import 'slip_detail_screen.dart';
 
+@RoutePage()
 class MonthlyViewScreen extends StatefulWidget {
   final DateTime month;
 
@@ -39,12 +41,12 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
   Future<void> _deleteSlip(PaymentSlip slip) async {
     final confirm = await showShadDialog<bool>(
       context: context,
-      builder: (context) => ShadDialog.alert(
+      builder: (dialogContext) => ShadDialog.alert(
         title: const Text('Delete Slip'),
         description: const Text('Are you sure you want to delete this payment slip?'),
         actions: [
-          ShadButton.outline(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          ShadButton.destructive(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+          ShadButton.outline(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          ShadButton.destructive(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Delete')),
         ],
       ),
     );
@@ -123,10 +125,7 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
                               padding: const EdgeInsets.only(bottom: 8.0),
                               child: GestureDetector(
                                 onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (context) => SlipDetailScreen(slip: slip)),
-                                  ).then((_) => _loadSlips());
+                                  context.router.push(SlipDetailRoute(slip: slip)).then((_) => _loadSlips());
                                 },
                                 child: Container(
                                   width: double.infinity,

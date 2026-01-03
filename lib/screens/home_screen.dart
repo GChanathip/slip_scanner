@@ -1,14 +1,14 @@
+import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import '../models/payment_slip.dart';
+import '../router/app_router.dart';
 import '../services/database_service.dart';
 import '../providers/scanning_provider.dart';
-import 'monthly_view_screen.dart';
-import 'slip_detail_screen.dart';
-import 'scanning_progress_screen.dart';
 
+@RoutePage()
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -56,10 +56,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (scanningState.isScanning) {
       // Already scanning - just navigate to progress screen
       if (mounted) {
-        final result = await Navigator.push<bool>(
-          context,
-          MaterialPageRoute(builder: (context) => const ScanningProgressScreen()),
-        );
+        final result = await context.router.push<bool>(const ScanningProgressRoute());
 
         // Refresh data if scanning completed successfully
         if (result == true) {
@@ -79,10 +76,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     if (status.isGranted) {
       if (mounted) {
-        final result = await Navigator.push<bool>(
-          context,
-          MaterialPageRoute(builder: (context) => const ScanningProgressScreen()),
-        );
+        final result = await context.router.push<bool>(const ScanningProgressRoute());
 
         // Refresh data if scanning completed successfully
         if (result == true) {
@@ -227,10 +221,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                       footer: ShadButton.ghost(
                         onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => MonthlyViewScreen(month: DateTime.now())),
-                          ).then((_) => _loadData());
+                          context.router.push(MonthlyViewRoute(month: DateTime.now())).then((_) => _loadData());
                         },
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -255,10 +246,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         padding: const EdgeInsets.only(bottom: 8.0),
                         child: GestureDetector(
                           onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => MonthlyViewScreen(month: month)),
-                            ).then((_) => _loadData());
+                            context.router.push(MonthlyViewRoute(month: month)).then((_) => _loadData());
                           },
                           child: Container(
                             width: double.infinity,
@@ -307,10 +295,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         padding: const EdgeInsets.only(bottom: 8.0),
                         child: GestureDetector(
                           onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => SlipDetailScreen(slip: slip)),
-                            ).then((_) => _loadData());
+                            context.router.push(SlipDetailRoute(slip: slip)).then((_) => _loadData());
                           },
                           child: Container(
                             width: double.infinity,

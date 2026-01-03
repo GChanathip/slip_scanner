@@ -4,6 +4,8 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   file_selector_linux
+  objectbox_flutter_libs
+  record_linux
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST

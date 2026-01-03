@@ -1,9 +1,11 @@
+import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import '../providers/scanning_provider.dart';
 import '../providers/scanning_state.dart';
 
+@RoutePage()
 class ScanningProgressScreen extends ConsumerStatefulWidget {
   const ScanningProgressScreen({super.key});
 
@@ -71,7 +73,7 @@ class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen>
               ShadButton(
                 onPressed: () {
                   ref.read(scanningProvider.notifier).reset();
-                  Navigator.of(context).pop(false);
+                  context.router.maybePop(false);
                 },
                 child: const Text('Go Back'),
               ),
@@ -90,7 +92,7 @@ class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen>
         foregroundColor: theme.colorScheme.foreground,
         leading: ShadIconButton(
           icon: const Icon(LucideIcons.x),
-          onPressed: scanningState.isScanning ? _cancelScanning : () => Navigator.of(context).pop(false),
+          onPressed: scanningState.isScanning ? _cancelScanning : () => context.router.maybePop(false),
         ),
       ),
       backgroundColor: theme.colorScheme.background,
@@ -183,15 +185,15 @@ class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen>
   void _showCompletionDialog(int processed, int found) {
     showShadDialog(
       context: context,
-      builder: (context) => ShadDialog.alert(
+      builder: (dialogContext) => ShadDialog.alert(
         title: const Text('Scanning Complete'),
         description: Text('Processed $processed photos and found $found payment slips.'),
         actions: [
           ShadButton(
             onPressed: () {
-              Navigator.of(context).pop(); // Close dialog
+              Navigator.of(dialogContext).pop(); // Close dialog
               ref.read(scanningProvider.notifier).reset();
-              Navigator.of(context).pop(true); // Return to home with refresh signal
+              context.router.maybePop(true); // Return to home with refresh signal
             },
             child: const Text('OK'),
           ),
@@ -204,7 +206,7 @@ class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen>
     try {
       await ref.read(scanningProvider.notifier).cancelScanning();
       if (mounted) {
-        Navigator.of(context).pop(false);
+        context.router.maybePop(false);
       }
     } catch (e) {
       if (mounted) {

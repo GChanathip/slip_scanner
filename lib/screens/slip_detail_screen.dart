@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import '../models/payment_slip.dart';
 import '../services/database_service.dart';
 import '../services/platform_service.dart';
 
+@RoutePage()
 class SlipDetailScreen extends StatelessWidget {
   final PaymentSlip slip;
 
@@ -13,12 +15,12 @@ class SlipDetailScreen extends StatelessWidget {
   Future<void> _deleteSlip(BuildContext context) async {
     final confirm = await showShadDialog<bool>(
       context: context,
-      builder: (context) => ShadDialog.alert(
+      builder: (dialogContext) => ShadDialog.alert(
         title: const Text('Delete Slip'),
         description: const Text('Are you sure you want to delete this payment slip?'),
         actions: [
-          ShadButton.outline(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          ShadButton.destructive(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+          ShadButton.outline(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          ShadButton.destructive(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Delete')),
         ],
       ),
     );
@@ -29,7 +31,7 @@ class SlipDetailScreen extends StatelessWidget {
         await DatabaseService.deletePaymentSlip(slip.id!);
 
         if (context.mounted) {
-          Navigator.pop(context);
+          context.router.maybePop();
           ShadSonner.of(
             context,
           ).show(const ShadToast(title: Text('Success'), description: Text('Slip deleted successfully')));
