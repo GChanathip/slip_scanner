@@ -11,6 +11,80 @@
 part of 'app_router.dart';
 
 /// generated route for
+/// [AnalysisScreen]
+class AnalysisRoute extends PageRouteInfo<void> {
+  const AnalysisRoute({List<PageRouteInfo>? children})
+    : super(AnalysisRoute.name, initialChildren: children);
+
+  static const String name = 'AnalysisRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const AnalysisScreen();
+    },
+  );
+}
+
+/// generated route for
+/// [ChatScreen]
+class ChatRoute extends PageRouteInfo<ChatRouteArgs> {
+  ChatRoute({
+    Key? key,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<PageRouteInfo>? children,
+  }) : super(
+         ChatRoute.name,
+         args: ChatRouteArgs(key: key, startDate: startDate, endDate: endDate),
+         initialChildren: children,
+       );
+
+  static const String name = 'ChatRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      final args = data.argsAs<ChatRouteArgs>(
+        orElse: () => const ChatRouteArgs(),
+      );
+      return ChatScreen(
+        key: args.key,
+        startDate: args.startDate,
+        endDate: args.endDate,
+      );
+    },
+  );
+}
+
+class ChatRouteArgs {
+  const ChatRouteArgs({this.key, this.startDate, this.endDate});
+
+  final Key? key;
+
+  final DateTime? startDate;
+
+  final DateTime? endDate;
+
+  @override
+  String toString() {
+    return 'ChatRouteArgs{key: $key, startDate: $startDate, endDate: $endDate}';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! ChatRouteArgs) return false;
+    return key == other.key &&
+        startDate == other.startDate &&
+        endDate == other.endDate;
+  }
+
+  @override
+  int get hashCode => key.hashCode ^ startDate.hashCode ^ endDate.hashCode;
+}
+
+/// generated route for
 /// [HomeScreen]
 class HomeRoute extends PageRouteInfo<void> {
   const HomeRoute({List<PageRouteInfo>? children})
@@ -85,6 +159,22 @@ class ScanningProgressRoute extends PageRouteInfo<void> {
     name,
     builder: (data) {
       return const ScanningProgressScreen();
+    },
+  );
+}
+
+/// generated route for
+/// [SettingsScreen]
+class SettingsRoute extends PageRouteInfo<void> {
+  const SettingsRoute({List<PageRouteInfo>? children})
+    : super(SettingsRoute.name, initialChildren: children);
+
+  static const String name = 'SettingsRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const SettingsScreen();
     },
   );
 }

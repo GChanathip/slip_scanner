@@ -15,7 +15,7 @@ class DatabaseService {
     String path = join(await getDatabasesPath(), 'payment_slips.db');
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -30,13 +30,24 @@ class DatabaseService {
         amount REAL NOT NULL,
         date TEXT NOT NULL,
         extractedText TEXT NOT NULL,
-        createdAt TEXT NOT NULL
+        createdAt TEXT NOT NULL,
+        recipientName TEXT,
+        notes TEXT,
+        category TEXT,
+        llmProcessingStatus TEXT DEFAULT 'pending',
+        ragIndexed INTEGER DEFAULT 0,
+        updatedAt TEXT
       )
     ''');
-    
+
     // Create index for assetId to prevent duplicates
     await db.execute('''
       CREATE INDEX idx_assetId ON payment_slips(assetId)
+    ''');
+
+    // Create index for LLM processing queue
+    await db.execute('''
+      CREATE INDEX idx_llm_status ON payment_slips(llmProcessingStatus)
     ''');
   }
 
@@ -44,10 +55,25 @@ class DatabaseService {
     if (oldVersion < 2) {
       // Add assetId column to existing table
       await db.execute('ALTER TABLE payment_slips ADD COLUMN assetId TEXT');
-      
+
       // Create index for assetId
       await db.execute('''
         CREATE INDEX idx_assetId ON payment_slips(assetId)
+      ''');
+    }
+
+    if (oldVersion < 3) {
+      // Add LLM extraction fields
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN recipientName TEXT');
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN notes TEXT');
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN category TEXT');
+      await db.execute("ALTER TABLE payment_slips ADD COLUMN llmProcessingStatus TEXT DEFAULT 'pending'");
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN ragIndexed INTEGER DEFAULT 0');
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN updatedAt TEXT');
+
+      // Create index for LLM processing queue
+      await db.execute('''
+        CREATE INDEX idx_llm_status ON payment_slips(llmProcessingStatus)
       ''');
     }
   }
@@ -186,5 +212,120 @@ class DatabaseService {
       where: 'id = ?',
       whereArgs: [id],
     );
+  }
+
+  // ============ LLM Processing Queue Methods ============
+
+  /// Get slips with a specific LLM processing status
+  static Future<List<PaymentSlip>> getSlipsWithStatus(String status, {int limit = 10}) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'payment_slips',
+      where: 'llmProcessingStatus = ?',
+      whereArgs: [status],
+      orderBy: 'createdAt ASC',
+      limit: limit,
+    );
+    return List.generate(maps.length, (i) => PaymentSlip.fromMap(maps[i]));
+  }
+
+  /// Count slips with a specific status
+  static Future<int> countSlipsWithStatus(String status) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM payment_slips WHERE llmProcessingStatus = ?',
+      [status],
+    );
+    return result.first['count'] as int;
+  }
+
+  /// Update LLM processing status
+  static Future<void> updateLLMStatus(int id, String status) async {
+    final db = await database;
+    await db.update(
+      'payment_slips',
+      {
+        'llmProcessingStatus': status,
+        'updatedAt': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Update extracted data from LLM
+  static Future<void> updateExtractedData(
+    int id, {
+    String? recipientName,
+    String? notes,
+    String? category,
+  }) async {
+    final db = await database;
+    final updates = <String, dynamic>{
+      'updatedAt': DateTime.now().toIso8601String(),
+    };
+    if (recipientName != null) updates['recipientName'] = recipientName;
+    if (notes != null) updates['notes'] = notes;
+    if (category != null) updates['category'] = category;
+
+    await db.update(
+      'payment_slips',
+      updates,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Update RAG indexed status
+  static Future<void> updateRAGIndexed(int id, bool indexed) async {
+    final db = await database;
+    await db.update(
+      'payment_slips',
+      {
+        'ragIndexed': indexed ? 1 : 0,
+        'updatedAt': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Get payment slips within a date range
+  static Future<List<PaymentSlip>> getPaymentSlipsInRange(DateTime start, DateTime end) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'payment_slips',
+      where: 'date >= ? AND date <= ?',
+      whereArgs: [start.toIso8601String(), end.toIso8601String()],
+      orderBy: 'date DESC',
+    );
+    return List.generate(maps.length, (i) => PaymentSlip.fromMap(maps[i]));
+  }
+
+  /// Reset failed slips back to pending for retry
+  static Future<void> resetFailedToStatus(String newStatus) async {
+    final db = await database;
+    await db.update(
+      'payment_slips',
+      {
+        'llmProcessingStatus': newStatus,
+        'updatedAt': DateTime.now().toIso8601String(),
+      },
+      where: 'llmProcessingStatus = ?',
+      whereArgs: ['failed'],
+    );
+  }
+
+  /// Get slips that haven't been indexed in RAG
+  static Future<List<PaymentSlip>> getUnindexedSlips({int limit = 10}) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'payment_slips',
+      where: 'ragIndexed = 0 AND llmProcessingStatus = ?',
+      whereArgs: ['completed'],
+      orderBy: 'createdAt ASC',
+      limit: limit,
+    );
+    return List.generate(maps.length, (i) => PaymentSlip.fromMap(maps[i]));
   }
 }

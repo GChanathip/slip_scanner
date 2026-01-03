@@ -19,9 +19,38 @@ flutter build ios            # Build for iOS release
 flutter test                 # Run tests
 flutter analyze              # Analyze code (includes linting)
 cd ios && pod install        # Install iOS dependencies
+dart run build_runner build  # Generate Riverpod/Freezed/AutoRoute code
+dart run build_runner watch  # Watch mode for code generation
 ```
 
+## Code Generation
+
+This project uses code generation for state management and routing. After modifying files with `@riverpod`, `@freezed`, or `@RoutePage` annotations, run:
+```bash
+dart run build_runner build --delete-conflicting-outputs
+```
+
+Generated files (do not edit manually):
+- `*.g.dart` - Riverpod providers
+- `*.freezed.dart` - Freezed immutable classes
+- `lib/router/app_router.gr.dart` - AutoRoute routes
+
 ## Architecture Overview
+
+### UI (ShadCN UI)
+
+Uses `shadcn_ui` as the design system instead of Material Design. Components include `ShadApp`, `ShadCard`, `ShadButton`, `ShadAlert`, etc. Theming configured in `main.dart` with Zinc color scheme.
+
+### State Management (Riverpod + Freezed)
+
+- **Riverpod** for reactive state management with code generation (`@riverpod`)
+- **Freezed** for immutable state classes with `copyWith()` support
+- Key provider: `ScanningProvider` (keepAlive) manages entire scan lifecycle
+- State flows: iOS streams → PlatformService → ScanningProvider → UI
+
+### Routing (AutoRoute)
+
+Type-safe routing with `@RoutePage` annotations. Routes defined in `lib/router/app_router.dart`.
 
 ### Flutter 3.35+ Merged Thread Consideration
 
@@ -36,7 +65,7 @@ Dual platform channels for Flutter-iOS communication:
 ### Data Flow
 
 ```
-Flutter UI → PlatformService → iOS AppDelegate (background thread) → Vision Framework → Progress Stream → Database
+Flutter UI → ScanningProvider → PlatformService → iOS AppDelegate (background thread) → Vision Framework → Progress Stream → Database
 ```
 
 ### iOS Native Implementation (AppDelegate.swift)
@@ -86,10 +115,12 @@ iOS sends updates after every image processed via `DispatchQueue.main.async` (no
 | `ios/Runner/AppDelegate.swift` | All iOS OCR logic, Vision Framework, concurrency |
 | `lib/services/platform_service.dart` | Flutter-iOS bridge, stream management |
 | `lib/services/database_service.dart` | SQLite operations, batch inserts with dedup |
-| `lib/screens/scanning_progress_screen.dart` | Real-time progress UI |
+| `lib/providers/scanning_provider.dart` | Riverpod state management for scanning |
+| `lib/providers/scanning_state.dart` | Freezed immutable state class |
+| `lib/router/app_router.dart` | AutoRoute navigation configuration |
 
 ## Requirements
 
-- **Flutter SDK**: 3.35+ (merged thread model)
+- **Flutter SDK**: 3.38.x+
 - **iOS Deployment Target**: 15.6+
 - **Xcode**: Latest for iOS development

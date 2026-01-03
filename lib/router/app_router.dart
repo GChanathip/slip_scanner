@@ -6,6 +6,9 @@ import '../screens/home_screen.dart';
 import '../screens/monthly_view_screen.dart';
 import '../screens/scanning_progress_screen.dart';
 import '../screens/slip_detail_screen.dart';
+import '../screens/analysis_screen.dart';
+import '../screens/chat_screen.dart';
+import '../screens/settings_screen.dart';
 
 part 'app_router.gr.dart';
 
@@ -20,6 +23,9 @@ class AppRouter extends RootStackRouter {
         AutoRoute(page: ScanningProgressRoute.page),
         AutoRoute(page: SlipDetailRoute.page),
         AutoRoute(page: MonthlyViewRoute.page),
+        AutoRoute(page: AnalysisRoute.page),
+        AutoRoute(page: ChatRoute.page),
+        AutoRoute(page: SettingsRoute.page),
       ];
 }
 

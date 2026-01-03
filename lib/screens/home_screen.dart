@@ -7,6 +7,7 @@ import '../models/payment_slip.dart';
 import '../router/app_router.dart';
 import '../services/database_service.dart';
 import '../providers/scanning_provider.dart';
+import '../providers/extraction_provider.dart';
 
 @RoutePage()
 class HomeScreen extends ConsumerStatefulWidget {
@@ -204,6 +205,99 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ],
                       ),
                     ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Analyze Expenses Card
+                  GestureDetector(
+                    onTap: () => context.router.push(const AnalysisRoute()),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            theme.colorScheme.secondary,
+                            theme.colorScheme.secondary.withValues(alpha: 0.8),
+                          ],
+                        ),
+                        borderRadius: theme.radius,
+                      ),
+                      padding: const EdgeInsets.all(20.0),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.secondaryForeground.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(LucideIcons.sparkles, color: theme.colorScheme.secondaryForeground, size: 32),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'AI Expense Analysis',
+                                  style: TextStyle(
+                                    color: theme.colorScheme.secondaryForeground,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Get insights and chat with AI about your spending',
+                                  style: TextStyle(
+                                    color: theme.colorScheme.secondaryForeground.withValues(alpha: 0.9),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(LucideIcons.arrowRight, color: theme.colorScheme.secondaryForeground),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Background processing indicator
+                  Builder(
+                    builder: (context) {
+                      final extractionState = ref.watch(extractionQueueProvider);
+                      if (extractionState.hasPending) {
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.muted,
+                              borderRadius: theme.radius,
+                            ),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation(theme.colorScheme.primary),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '${extractionState.pendingCount} slips pending AI analysis',
+                                  style: theme.textTheme.small,
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
                   ),
 
                   const SizedBox(height: 24),
