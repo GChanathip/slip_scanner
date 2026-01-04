@@ -12,11 +12,7 @@ class ChatScreen extends ConsumerStatefulWidget {
   final DateTime? startDate;
   final DateTime? endDate;
 
-  const ChatScreen({
-    super.key,
-    this.startDate,
-    this.endDate,
-  });
+  const ChatScreen({super.key, this.startDate, this.endDate});
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -101,7 +97,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final cactusState = ref.watch(cactusProvider);
 
     // Scroll to bottom when new messages arrive
-    ref.listen(chatProvider.select((s) => s.messages.length), (_, __) {
+    ref.listen(chatProvider.select((s) => s.messages.length), (_, _) {
       _scrollToBottom();
     });
 
@@ -148,14 +144,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   if (cactusState.isLoading) ...[
                     Text(cactusState.downloadStatus, style: theme.textTheme.small),
                     const SizedBox(height: 8),
-                    LinearProgressIndicator(
-                      value: cactusState.isDownloading ? cactusState.downloadProgress : null,
-                    ),
+                    LinearProgressIndicator(value: cactusState.isDownloading ? cactusState.downloadProgress : null),
                   ] else if (cactusState.error != null) ...[
-                    ShadAlert.destructive(
-                      title: const Text('Model Error'),
-                      description: Text(cactusState.error!),
-                    ),
+                    ShadAlert.destructive(title: const Text('Model Error'), description: Text(cactusState.error!)),
                   ] else ...[
                     const Text('Loading AI model...'),
                     const SizedBox(height: 8),
@@ -193,9 +184,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       controller: _messageController,
                       decoration: InputDecoration(
                         hintText: 'Ask about your expenses...',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       ),
                       onSubmitted: (_) => _sendMessage(),
@@ -205,15 +194,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   ),
                   const SizedBox(width: 8),
                   ShadButton(
-                    onPressed: (cactusState.isModelLoaded && !chatState.isGenerating)
-                        ? _sendMessage
-                        : null,
+                    onPressed: (cactusState.isModelLoaded && !chatState.isGenerating) ? _sendMessage : null,
                     child: chatState.isGenerating
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(LucideIcons.send),
                   ),
                 ],
@@ -230,16 +213,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            LucideIcons.messageCircle,
-            size: 64,
-            color: theme.colorScheme.mutedForeground,
-          ),
+          Icon(LucideIcons.messageCircle, size: 64, color: theme.colorScheme.mutedForeground),
           const SizedBox(height: 16),
-          Text(
-            'Ask me about your expenses',
-            style: theme.textTheme.h4,
-          ),
+          Text('Ask me about your expenses', style: theme.textTheme.h4),
           const SizedBox(height: 8),
           Text(
             'I can help you understand spending patterns,\nfind specific transactions, and give budget advice.',

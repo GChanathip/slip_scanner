@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/payment_slip.dart';
+import 'extraction_notifier.dart';
 
 class DatabaseService {
   static Database? _database;
@@ -109,28 +110,36 @@ class DatabaseService {
       }
       
       // Use transaction for atomicity
+      List<int> insertedIds = [];
       await db.transaction((txn) async {
         final batch = txn.batch();
         int insertCount = 0;
         int skipCount = 0;
-        
+
         for (final slip in slips) {
           bool shouldInsert = true;
-          
+
           if (slip.assetId != null && existingAssetIds.contains(slip.assetId)) {
             shouldInsert = false;
             skipCount++;
           }
-          
+
           if (shouldInsert) {
             batch.insert('payment_slips', slip.toMap());
             insertCount++;
           }
         }
-        
-        await batch.commit(noResult: true);
+
+        // Get inserted IDs for notification
+        final results = await batch.commit();
+        insertedIds = results.whereType<int>().toList();
         print('🗃️ DEBUG: Batch insert completed - inserted: $insertCount, skipped: $skipCount');
       });
+
+      // Notify extraction queue that new slips are available (event-driven)
+      if (insertedIds.isNotEmpty) {
+        ExtractionNotifier.instance.notifyNewSlips(insertedIds);
+      }
       
     } catch (e) {
       print('❌ ERROR: Database batch insert failed: $e');

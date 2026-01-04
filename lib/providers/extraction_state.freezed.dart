@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$ExtractionQueueState {
 
- int get pendingCount; int get processedCount; int get failedCount; bool get isProcessing; int? get currentSlipId;
+ int get pendingCount; int get processedCount; int get failedCount; int get ragQueueCount; bool get isProcessing; int? get currentSlipId;
 /// Create a copy of ExtractionQueueState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +25,16 @@ $ExtractionQueueStateCopyWith<ExtractionQueueState> get copyWith => _$Extraction
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ExtractionQueueState&&(identical(other.pendingCount, pendingCount) || other.pendingCount == pendingCount)&&(identical(other.processedCount, processedCount) || other.processedCount == processedCount)&&(identical(other.failedCount, failedCount) || other.failedCount == failedCount)&&(identical(other.isProcessing, isProcessing) || other.isProcessing == isProcessing)&&(identical(other.currentSlipId, currentSlipId) || other.currentSlipId == currentSlipId));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ExtractionQueueState&&(identical(other.pendingCount, pendingCount) || other.pendingCount == pendingCount)&&(identical(other.processedCount, processedCount) || other.processedCount == processedCount)&&(identical(other.failedCount, failedCount) || other.failedCount == failedCount)&&(identical(other.ragQueueCount, ragQueueCount) || other.ragQueueCount == ragQueueCount)&&(identical(other.isProcessing, isProcessing) || other.isProcessing == isProcessing)&&(identical(other.currentSlipId, currentSlipId) || other.currentSlipId == currentSlipId));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,pendingCount,processedCount,failedCount,isProcessing,currentSlipId);
+int get hashCode => Object.hash(runtimeType,pendingCount,processedCount,failedCount,ragQueueCount,isProcessing,currentSlipId);
 
 @override
 String toString() {
-  return 'ExtractionQueueState(pendingCount: $pendingCount, processedCount: $processedCount, failedCount: $failedCount, isProcessing: $isProcessing, currentSlipId: $currentSlipId)';
+  return 'ExtractionQueueState(pendingCount: $pendingCount, processedCount: $processedCount, failedCount: $failedCount, ragQueueCount: $ragQueueCount, isProcessing: $isProcessing, currentSlipId: $currentSlipId)';
 }
 
 
@@ -45,7 +45,7 @@ abstract mixin class $ExtractionQueueStateCopyWith<$Res>  {
   factory $ExtractionQueueStateCopyWith(ExtractionQueueState value, $Res Function(ExtractionQueueState) _then) = _$ExtractionQueueStateCopyWithImpl;
 @useResult
 $Res call({
- int pendingCount, int processedCount, int failedCount, bool isProcessing, int? currentSlipId
+ int pendingCount, int processedCount, int failedCount, int ragQueueCount, bool isProcessing, int? currentSlipId
 });
 
 
@@ -62,11 +62,12 @@ class _$ExtractionQueueStateCopyWithImpl<$Res>
 
 /// Create a copy of ExtractionQueueState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? pendingCount = null,Object? processedCount = null,Object? failedCount = null,Object? isProcessing = null,Object? currentSlipId = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? pendingCount = null,Object? processedCount = null,Object? failedCount = null,Object? ragQueueCount = null,Object? isProcessing = null,Object? currentSlipId = freezed,}) {
   return _then(_self.copyWith(
 pendingCount: null == pendingCount ? _self.pendingCount : pendingCount // ignore: cast_nullable_to_non_nullable
 as int,processedCount: null == processedCount ? _self.processedCount : processedCount // ignore: cast_nullable_to_non_nullable
 as int,failedCount: null == failedCount ? _self.failedCount : failedCount // ignore: cast_nullable_to_non_nullable
+as int,ragQueueCount: null == ragQueueCount ? _self.ragQueueCount : ragQueueCount // ignore: cast_nullable_to_non_nullable
 as int,isProcessing: null == isProcessing ? _self.isProcessing : isProcessing // ignore: cast_nullable_to_non_nullable
 as bool,currentSlipId: freezed == currentSlipId ? _self.currentSlipId : currentSlipId // ignore: cast_nullable_to_non_nullable
 as int?,
@@ -154,10 +155,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int pendingCount,  int processedCount,  int failedCount,  bool isProcessing,  int? currentSlipId)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int pendingCount,  int processedCount,  int failedCount,  int ragQueueCount,  bool isProcessing,  int? currentSlipId)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ExtractionQueueState() when $default != null:
-return $default(_that.pendingCount,_that.processedCount,_that.failedCount,_that.isProcessing,_that.currentSlipId);case _:
+return $default(_that.pendingCount,_that.processedCount,_that.failedCount,_that.ragQueueCount,_that.isProcessing,_that.currentSlipId);case _:
   return orElse();
 
 }
@@ -175,10 +176,10 @@ return $default(_that.pendingCount,_that.processedCount,_that.failedCount,_that.
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int pendingCount,  int processedCount,  int failedCount,  bool isProcessing,  int? currentSlipId)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int pendingCount,  int processedCount,  int failedCount,  int ragQueueCount,  bool isProcessing,  int? currentSlipId)  $default,) {final _that = this;
 switch (_that) {
 case _ExtractionQueueState():
-return $default(_that.pendingCount,_that.processedCount,_that.failedCount,_that.isProcessing,_that.currentSlipId);case _:
+return $default(_that.pendingCount,_that.processedCount,_that.failedCount,_that.ragQueueCount,_that.isProcessing,_that.currentSlipId);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -195,10 +196,10 @@ return $default(_that.pendingCount,_that.processedCount,_that.failedCount,_that.
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int pendingCount,  int processedCount,  int failedCount,  bool isProcessing,  int? currentSlipId)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int pendingCount,  int processedCount,  int failedCount,  int ragQueueCount,  bool isProcessing,  int? currentSlipId)?  $default,) {final _that = this;
 switch (_that) {
 case _ExtractionQueueState() when $default != null:
-return $default(_that.pendingCount,_that.processedCount,_that.failedCount,_that.isProcessing,_that.currentSlipId);case _:
+return $default(_that.pendingCount,_that.processedCount,_that.failedCount,_that.ragQueueCount,_that.isProcessing,_that.currentSlipId);case _:
   return null;
 
 }
@@ -210,12 +211,13 @@ return $default(_that.pendingCount,_that.processedCount,_that.failedCount,_that.
 
 
 class _ExtractionQueueState extends ExtractionQueueState {
-  const _ExtractionQueueState({this.pendingCount = 0, this.processedCount = 0, this.failedCount = 0, this.isProcessing = false, this.currentSlipId}): super._();
+  const _ExtractionQueueState({this.pendingCount = 0, this.processedCount = 0, this.failedCount = 0, this.ragQueueCount = 0, this.isProcessing = false, this.currentSlipId}): super._();
   
 
 @override@JsonKey() final  int pendingCount;
 @override@JsonKey() final  int processedCount;
 @override@JsonKey() final  int failedCount;
+@override@JsonKey() final  int ragQueueCount;
 @override@JsonKey() final  bool isProcessing;
 @override final  int? currentSlipId;
 
@@ -229,16 +231,16 @@ _$ExtractionQueueStateCopyWith<_ExtractionQueueState> get copyWith => __$Extract
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ExtractionQueueState&&(identical(other.pendingCount, pendingCount) || other.pendingCount == pendingCount)&&(identical(other.processedCount, processedCount) || other.processedCount == processedCount)&&(identical(other.failedCount, failedCount) || other.failedCount == failedCount)&&(identical(other.isProcessing, isProcessing) || other.isProcessing == isProcessing)&&(identical(other.currentSlipId, currentSlipId) || other.currentSlipId == currentSlipId));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ExtractionQueueState&&(identical(other.pendingCount, pendingCount) || other.pendingCount == pendingCount)&&(identical(other.processedCount, processedCount) || other.processedCount == processedCount)&&(identical(other.failedCount, failedCount) || other.failedCount == failedCount)&&(identical(other.ragQueueCount, ragQueueCount) || other.ragQueueCount == ragQueueCount)&&(identical(other.isProcessing, isProcessing) || other.isProcessing == isProcessing)&&(identical(other.currentSlipId, currentSlipId) || other.currentSlipId == currentSlipId));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,pendingCount,processedCount,failedCount,isProcessing,currentSlipId);
+int get hashCode => Object.hash(runtimeType,pendingCount,processedCount,failedCount,ragQueueCount,isProcessing,currentSlipId);
 
 @override
 String toString() {
-  return 'ExtractionQueueState(pendingCount: $pendingCount, processedCount: $processedCount, failedCount: $failedCount, isProcessing: $isProcessing, currentSlipId: $currentSlipId)';
+  return 'ExtractionQueueState(pendingCount: $pendingCount, processedCount: $processedCount, failedCount: $failedCount, ragQueueCount: $ragQueueCount, isProcessing: $isProcessing, currentSlipId: $currentSlipId)';
 }
 
 
@@ -249,7 +251,7 @@ abstract mixin class _$ExtractionQueueStateCopyWith<$Res> implements $Extraction
   factory _$ExtractionQueueStateCopyWith(_ExtractionQueueState value, $Res Function(_ExtractionQueueState) _then) = __$ExtractionQueueStateCopyWithImpl;
 @override @useResult
 $Res call({
- int pendingCount, int processedCount, int failedCount, bool isProcessing, int? currentSlipId
+ int pendingCount, int processedCount, int failedCount, int ragQueueCount, bool isProcessing, int? currentSlipId
 });
 
 
@@ -266,11 +268,12 @@ class __$ExtractionQueueStateCopyWithImpl<$Res>
 
 /// Create a copy of ExtractionQueueState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? pendingCount = null,Object? processedCount = null,Object? failedCount = null,Object? isProcessing = null,Object? currentSlipId = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? pendingCount = null,Object? processedCount = null,Object? failedCount = null,Object? ragQueueCount = null,Object? isProcessing = null,Object? currentSlipId = freezed,}) {
   return _then(_ExtractionQueueState(
 pendingCount: null == pendingCount ? _self.pendingCount : pendingCount // ignore: cast_nullable_to_non_nullable
 as int,processedCount: null == processedCount ? _self.processedCount : processedCount // ignore: cast_nullable_to_non_nullable
 as int,failedCount: null == failedCount ? _self.failedCount : failedCount // ignore: cast_nullable_to_non_nullable
+as int,ragQueueCount: null == ragQueueCount ? _self.ragQueueCount : ragQueueCount // ignore: cast_nullable_to_non_nullable
 as int,isProcessing: null == isProcessing ? _self.isProcessing : isProcessing // ignore: cast_nullable_to_non_nullable
 as bool,currentSlipId: freezed == currentSlipId ? _self.currentSlipId : currentSlipId // ignore: cast_nullable_to_non_nullable
 as int?,

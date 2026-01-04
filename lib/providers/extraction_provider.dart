@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import '../models/payment_slip.dart';
 import '../services/database_service.dart';
 import '../services/extraction_service.dart';
-import '../services/cactus_service.dart';
+import '../services/extraction_notifier.dart';
+import '../services/rag_queue_service.dart';
 import 'cactus_provider.dart';
 import 'extraction_state.dart';
 
@@ -12,13 +12,16 @@ part 'extraction_provider.g.dart';
 
 @Riverpod(keepAlive: true)
 class ExtractionQueue extends _$ExtractionQueue {
-  Timer? _processingTimer;
-  bool _isProcessingItem = false;
+  StreamSubscription<List<int>>? _newSlipsSubscription;
+  bool _isRunning = false;
+  Completer<void>? _workAvailable;
 
   @override
   ExtractionQueueState build() {
     ref.onDispose(() {
-      _processingTimer?.cancel();
+      _isRunning = false;
+      _newSlipsSubscription?.cancel();
+      _workAvailable?.complete();
     });
 
     // Load initial counts
@@ -32,61 +35,103 @@ class ExtractionQueue extends _$ExtractionQueue {
     try {
       final pending = await DatabaseService.countSlipsWithStatus('pending');
       final failed = await DatabaseService.countSlipsWithStatus('failed');
-      state = state.copyWith(pendingCount: pending, failedCount: failed);
+      final ragPending = RAGQueueService.instance.pendingCount;
+      state = state.copyWith(
+        pendingCount: pending,
+        failedCount: failed,
+        ragQueueCount: ragPending,
+      );
     } catch (e) {
       debugPrint('Error loading queue counts: $e');
     }
   }
 
-  /// Start background processing - called after model is loaded
+  /// Start event-driven background processing - called after model is loaded
   void startBackgroundProcessing() {
-    if (state.isProcessing) return;
-
-    // Process queue every 2 seconds to avoid overwhelming device
-    _processingTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      _processNextInQueue();
-    });
+    if (_isRunning) return;
+    _isRunning = true;
     state = state.copyWith(isProcessing: true);
-    debugPrint('🤖 Background extraction started');
+
+    // Listen for new slips (event-driven - no polling delay!)
+    _newSlipsSubscription = ExtractionNotifier.instance.onNewSlips.listen((_) {
+      debugPrint('🚀 New slips notification received - signaling work available');
+      _signalWorkAvailable();
+    });
+
+    // Start the continuous processing loop
+    _processingLoop();
+    debugPrint('🚀 Background extraction started (event-driven)');
   }
 
   /// Stop background processing
   void stopBackgroundProcessing() {
-    _processingTimer?.cancel();
-    _processingTimer = null;
+    _isRunning = false;
+    _newSlipsSubscription?.cancel();
+    _newSlipsSubscription = null;
+    _workAvailable?.complete();
     state = state.copyWith(isProcessing: false, currentSlipId: null);
-    debugPrint('🤖 Background extraction stopped');
+    debugPrint('🛑 Background extraction stopped');
   }
 
-  /// Process the next slip in the queue
-  Future<void> _processNextInQueue() async {
-    // Skip if already processing an item or model not loaded
-    if (_isProcessingItem) return;
+  /// Signal that work is available (wakes up the processing loop)
+  void _signalWorkAvailable() {
+    _workAvailable?.complete();
+    _workAvailable = null;
+  }
 
-    final cactusState = ref.read(cactusProvider);
-    if (!cactusState.isModelLoaded) return;
+  /// Main processing loop - event-driven, processes immediately when work available
+  Future<void> _processingLoop() async {
+    debugPrint('🔄 Processing loop started');
 
-    _isProcessingItem = true;
-
-    try {
-      // Get next unprocessed slip from database
-      final pendingSlips = await DatabaseService.getSlipsWithStatus('pending', limit: 1);
-      if (pendingSlips.isEmpty) {
-        _isProcessingItem = false;
-        return;
+    while (_isRunning) {
+      final cactusState = ref.read(cactusProvider);
+      if (!cactusState.isModelLoaded) {
+        // Wait for model to load
+        await Future.delayed(const Duration(milliseconds: 500));
+        continue;
       }
+
+      // Try to process extraction queue first (higher priority)
+      final processed = await _processNextSlip();
+
+      if (!processed) {
+        // No extraction work - try RAG queue (lower priority, when LLM idle)
+        final ragProcessed = await RAGQueueService.instance.processOne();
+
+        if (ragProcessed) {
+          // Update RAG queue count
+          state = state.copyWith(ragQueueCount: RAGQueueService.instance.pendingCount);
+        } else {
+          // No work at all - wait for signal or short timeout
+          _workAvailable = Completer<void>();
+          await Future.any([
+            _workAvailable!.future,
+            Future.delayed(const Duration(seconds: 1)),
+          ]);
+        }
+      }
+    }
+
+    debugPrint('🔄 Processing loop ended');
+  }
+
+  /// Process one slip from the extraction queue. Returns true if a slip was processed.
+  Future<bool> _processNextSlip() async {
+    try {
+      final pendingSlips = await DatabaseService.getSlipsWithStatus('pending', limit: 1);
+      if (pendingSlips.isEmpty) return false;
 
       final slip = pendingSlips.first;
       state = state.copyWith(currentSlipId: slip.id);
 
-      debugPrint('🤖 Processing slip ${slip.id}...');
+      debugPrint('⚡ Processing slip ${slip.id}...');
 
       // Mark as processing
       await DatabaseService.updateLLMStatus(slip.id!, 'processing');
 
-      // Run extraction
+      // Run extraction (this is the main LLM work)
       final result = await ExtractionService.extractFromText(slip.extractedText);
-      debugPrint('🤖 Extracted: $result');
+      debugPrint('⚡ Extracted: $result');
 
       // Update database with extracted data
       await DatabaseService.updateExtractedData(
@@ -99,20 +144,23 @@ class ExtractionQueue extends _$ExtractionQueue {
       // Mark as completed
       await DatabaseService.updateLLMStatus(slip.id!, 'completed');
 
-      // Index in RAG
-      await _indexInRAG(slip, result);
+      // Fire-and-forget RAG indexing (doesn't block next extraction!)
+      RAGQueueService.instance.enqueue(slip, result);
 
       // Update counts
       final pending = await DatabaseService.countSlipsWithStatus('pending');
       state = state.copyWith(
         processedCount: state.processedCount + 1,
         pendingCount: pending,
+        ragQueueCount: RAGQueueService.instance.pendingCount,
         currentSlipId: null,
       );
 
-      debugPrint('🤖 Slip ${slip.id} processed successfully');
+      ExtractionNotifier.instance.notifyExtractionComplete(slip.id!);
+      debugPrint('✅ Slip ${slip.id} extracted successfully');
+      return true;
     } catch (e) {
-      debugPrint('🤖 Extraction error: $e');
+      debugPrint('❌ Extraction error: $e');
 
       // Mark as failed if we have a current slip
       if (state.currentSlipId != null) {
@@ -125,43 +173,16 @@ class ExtractionQueue extends _$ExtractionQueue {
           currentSlipId: null,
         );
       }
-    } finally {
-      _isProcessingItem = false;
-    }
-  }
-
-  /// Index a slip in RAG for semantic search
-  Future<void> _indexInRAG(PaymentSlip slip, ExtractionResult result) async {
-    try {
-      // Create rich document for RAG indexing
-      final content = '''
-Payment of ${slip.amount} baht on ${slip.date.toIso8601String().split('T')[0]}.
-${result.recipientName != null ? 'To: ${result.recipientName}' : ''}
-${result.notes != null ? 'Notes: ${result.notes}' : ''}
-${result.category != null ? 'Category: ${result.category}' : ''}
-Original text: ${slip.extractedText.substring(0, slip.extractedText.length > 500 ? 500 : slip.extractedText.length)}
-''';
-
-      await CactusService.instance.storeInRAG(
-        id: slip.id.toString(),
-        content: content,
-      );
-
-      await DatabaseService.updateRAGIndexed(slip.id!, true);
-      debugPrint('🤖 Slip ${slip.id} indexed in RAG');
-    } catch (e) {
-      debugPrint('🤖 RAG indexing error: $e');
-      // Don't fail the whole extraction if RAG fails
+      return true; // Still counts as "processed attempt" to avoid infinite retry loop
     }
   }
 
   /// Manually trigger reprocessing of failed slips
   Future<void> retryFailed() async {
     await DatabaseService.resetFailedToStatus('pending');
-    final pending = await DatabaseService.countSlipsWithStatus('pending');
-    final failed = await DatabaseService.countSlipsWithStatus('failed');
-    state = state.copyWith(pendingCount: pending, failedCount: failed);
-    debugPrint('🤖 Reset ${state.failedCount} failed slips to pending');
+    await _loadCounts();
+    _signalWorkAvailable(); // Wake up the loop immediately
+    debugPrint('🔄 Reset failed slips to pending');
   }
 
   /// Refresh queue counts from database
@@ -175,8 +196,8 @@ Original text: ${slip.extractedText.substring(0, slip.extractedText.length > 500
     if (!cactusState.isModelLoaded) return;
 
     var pending = await DatabaseService.countSlipsWithStatus('pending');
-    while (pending > 0) {
-      await _processNextInQueue();
+    while (pending > 0 && _isRunning) {
+      await _processNextSlip();
       pending = await DatabaseService.countSlipsWithStatus('pending');
     }
   }
