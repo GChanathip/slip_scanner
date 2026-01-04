@@ -37,9 +37,9 @@ Generated files (do not edit manually):
 
 ## Architecture Overview
 
-### UI (ShadCN UI)
+### UI (ForUI)
 
-Uses `shadcn_ui` as the design system instead of Material Design. Components include `ShadApp`, `ShadCard`, `ShadButton`, `ShadAlert`, etc. Theming configured in `main.dart` with Zinc color scheme.
+Uses `forui` as the design system - a Flutter UI library inspired by shadcn/ui. Components include `FButton`, `FCard`, `FAlert`, `FDialog`, `FToast`, etc. Theming configured in `main.dart` with Zinc color scheme via `FThemes.zinc`. See [docs/FORUI_GUIDE.md](docs/FORUI_GUIDE.md) for comprehensive usage guide.
 
 ### State Management (Riverpod + Freezed)
 

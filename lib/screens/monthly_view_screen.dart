@@ -1,6 +1,7 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:forui/forui.dart';
+import 'package:intl/intl.dart';
 import '../models/payment_slip.dart';
 import '../router/app_router.dart';
 import '../services/database_service.dart';
@@ -39,14 +40,25 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
   }
 
   Future<void> _deleteSlip(PaymentSlip slip) async {
-    final confirm = await showShadDialog<bool>(
+    final confirm = await showFDialog<bool>(
       context: context,
-      builder: (dialogContext) => ShadDialog.alert(
+      builder: (dialogContext, style, animation) => FDialog(
+        style: (_) => style,
+        animation: animation,
+        direction: Axis.vertical,
         title: const Text('Delete Slip'),
-        description: const Text('Are you sure you want to delete this payment slip?'),
+        body: const Text('Are you sure you want to delete this payment slip?'),
         actions: [
-          ShadButton.outline(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          ShadButton.destructive(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Delete')),
+          FButton(
+            style: FButtonStyle.outline(),
+            onPress: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FButton(
+            style: FButtonStyle.destructive(),
+            onPress: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
@@ -58,15 +70,15 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
         await _loadSlips();
 
         if (mounted) {
-          ShadSonner.of(
-            context,
-          ).show(const ShadToast(title: Text('Success'), description: Text('Slip deleted successfully')));
+          showFToast(
+            context: context,
+            title: const Text('Success'),
+            description: const Text('Slip deleted successfully'),
+          );
         }
       } catch (e) {
         if (mounted) {
-          ShadSonner.of(
-            context,
-          ).show(ShadToast(title: const Text('Error'), description: Text('Error deleting slip: $e')));
+          showFToast(context: context, title: const Text('Error'), description: Text('Error deleting slip: $e'));
         }
       }
     }
@@ -74,17 +86,15 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ShadTheme.of(context);
+    final theme = context.theme;
     final monthName = DateFormat('MMMM yyyy').format(widget.month);
 
-    return Scaffold(
-      appBar: AppBar(
+    return FScaffold(
+      header: FHeader.nested(
         title: Text(monthName),
-        backgroundColor: theme.colorScheme.background,
-        foregroundColor: theme.colorScheme.foreground,
+        prefixes: [FHeaderAction.back(onPress: () => context.router.maybePop())],
       ),
-      backgroundColor: theme.colorScheme.background,
-      body: _isLoading
+      child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
@@ -93,21 +103,21 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(24.0),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                    border: Border(bottom: BorderSide(color: theme.colorScheme.border, width: 1)),
+                    color: theme.colors.primary.withValues(alpha: 0.1),
+                    border: Border(bottom: BorderSide(color: theme.colors.border, width: 1)),
                   ),
                   child: Column(
                     children: [
-                      Text('Total Spending', style: theme.textTheme.large),
+                      Text('Total Spending', style: theme.typography.lg),
                       const SizedBox(height: 8),
                       Text(
                         '\$${_totalAmount.toStringAsFixed(2)}',
-                        style: theme.textTheme.h1.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
-                        ),
+                        style: theme.typography.xl4.copyWith(fontWeight: FontWeight.bold, color: theme.colors.primary),
                       ),
-                      Text('${_slips.length} slip${_slips.length != 1 ? 's' : ''}', style: theme.textTheme.muted),
+                      Text(
+                        '${_slips.length} slip${_slips.length != 1 ? 's' : ''}',
+                        style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground),
+                      ),
                     ],
                   ),
                 ),
@@ -115,7 +125,12 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
                 // Slips List
                 Expanded(
                   child: _slips.isEmpty
-                      ? Center(child: Text('No payment slips for this month', style: theme.textTheme.muted))
+                      ? Center(
+                          child: Text(
+                            'No payment slips for this month',
+                            style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground),
+                          ),
+                        )
                       : ListView.builder(
                           padding: const EdgeInsets.all(8.0),
                           itemCount: _slips.length,
@@ -131,24 +146,21 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
                                   width: double.infinity,
                                   padding: const EdgeInsets.all(16),
                                   decoration: BoxDecoration(
-                                    color: theme.colorScheme.card,
-                                    border: Border.all(color: theme.colorScheme.border),
-                                    borderRadius: theme.radius,
+                                    color: theme.colors.background,
+                                    border: Border.all(color: theme.colors.border),
+                                    borderRadius: theme.style.borderRadius,
                                   ),
                                   child: Row(
                                     children: [
                                       Container(
                                         width: 40,
                                         height: 40,
-                                        decoration: BoxDecoration(
-                                          color: theme.colorScheme.primary,
-                                          shape: BoxShape.circle,
-                                        ),
+                                        decoration: BoxDecoration(color: theme.colors.primary, shape: BoxShape.circle),
                                         child: Center(
                                           child: Text(
                                             '\$',
                                             style: TextStyle(
-                                              color: theme.colorScheme.primaryForeground,
+                                              color: theme.colors.primaryForeground,
                                               fontWeight: FontWeight.bold,
                                               fontSize: 18,
                                             ),
@@ -162,26 +174,20 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
                                           children: [
                                             Text(
                                               '\$${slip.amount.toStringAsFixed(2)}',
-                                              style: theme.textTheme.large.copyWith(fontWeight: FontWeight.bold),
+                                              style: theme.typography.lg.copyWith(fontWeight: FontWeight.bold),
                                             ),
                                             Text(
                                               DateFormat('MMM dd, yyyy').format(slip.date),
-                                              style: theme.textTheme.muted,
+                                              style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground),
                                             ),
                                           ],
                                         ),
                                       ),
-                                      ShadButton.destructive(
-                                        size: ShadButtonSize.sm,
-                                        onPressed: () => _deleteSlip(slip),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(LucideIcons.trash2, size: 16),
-                                            const SizedBox(width: 4),
-                                            const Text('Delete'),
-                                          ],
-                                        ),
+                                      FButton(
+                                        style: FButtonStyle.destructive(),
+                                        onPress: () => _deleteSlip(slip),
+                                        prefix: Icon(FIcons.trash2, size: 16),
+                                        child: const Text('Delete'),
                                       ),
                                     ],
                                   ),

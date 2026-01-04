@@ -1,7 +1,7 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:forui/forui.dart';
 import '../providers/analysis_provider.dart';
 import '../providers/analysis_state.dart';
 import '../providers/cactus_provider.dart';
@@ -66,177 +66,180 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ShadTheme.of(context);
+    final theme = context.theme;
     final analysisState = ref.watch(analysisProvider);
-    final cactusState = ref.watch(cactusProvider);
     final extractionState = ref.watch(extractionQueueProvider);
+    final cactusState = ref.watch(cactusProvider);
 
-    return Scaffold(
-      appBar: AppBar(
+    return FScaffold(
+      header: FHeader.nested(
         title: const Text('Expense Analysis'),
-        leading: ShadIconButton.ghost(
-          icon: Icon(LucideIcons.arrowLeft, color: theme.colorScheme.foreground),
-          onPressed: () => context.router.maybePop(),
-        ),
-        actions: [
-          ShadIconButton.ghost(
-            icon: Icon(LucideIcons.settings, color: theme.colorScheme.foreground),
-            onPressed: () => context.router.push(const SettingsRoute()),
-          ),
+        prefixes: [FHeaderAction.back(onPress: () => context.router.maybePop())],
+        suffixes: [
+          FHeaderAction(icon: const Icon(FIcons.settings), onPress: () => context.router.push(const SettingsRoute())),
         ],
       ),
-      body: analysisState.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: () => ref.read(analysisProvider.notifier).refresh(),
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  // Date Range Picker
-                  ShadCard(
-                    child: InkWell(
+      child: Stack(
+        children: [
+          analysisState.isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    // Date Range Picker
+                    GestureDetector(
                       onTap: _selectDateRange,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Icon(LucideIcons.calendar, color: theme.colorScheme.primary),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Date Range', style: theme.textTheme.small),
-                                  Text(
-                                    _formatDateRange(),
-                                    style: theme.textTheme.p.copyWith(fontWeight: FontWeight.w500),
-                                  ),
-                                ],
+                      child: FCard.raw(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              Icon(FIcons.calendar, color: theme.colors.primary),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Date Range', style: theme.typography.sm),
+                                    Text(
+                                      _formatDateRange(),
+                                      style: theme.typography.base.copyWith(fontWeight: FontWeight.w500),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            Icon(LucideIcons.chevronRight, color: theme.colorScheme.mutedForeground),
-                          ],
+                              Icon(FIcons.chevronRight, color: theme.colors.mutedForeground),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: 16),
+                    const SizedBox(height: 16),
 
-                  // Processing Status (if pending)
-                  if (extractionState.hasPending)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: ShadAlert(
-                        icon: Icon(LucideIcons.loaderCircle, color: theme.colorScheme.primary),
-                        title: const Text('Processing'),
-                        description: Text('${extractionState.pendingCount} slips pending AI analysis'),
+                    // Processing Status (if pending)
+                    if (extractionState.hasPending)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: FAlert(
+                          icon: Icon(FIcons.loaderCircle, color: theme.colors.primary),
+                          title: const Text('Processing'),
+                          subtitle: Text('${extractionState.pendingCount} slips pending AI analysis'),
+                        ),
                       ),
-                    ),
 
-                  // Summary Stats
-                  if (analysisState.hasData) ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildStatCard(
-                            theme,
-                            'Total',
-                            '${analysisState.totalSpending.toStringAsFixed(0)} ฿',
-                            LucideIcons.wallet,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildStatCard(
-                            theme,
-                            'Transactions',
-                            analysisState.transactionCount.toString(),
-                            LucideIcons.receipt,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildStatCard(
-                            theme,
-                            'Average',
-                            '${analysisState.averageTransaction.toStringAsFixed(0)} ฿',
-                            LucideIcons.calculator,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildStatCard(
-                            theme,
-                            'Top Category',
-                            _formatCategory(analysisState.topCategory ?? 'N/A'),
-                            LucideIcons.tag,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // Category Breakdown
-                    if (analysisState.categoryBreakdown.isNotEmpty) ...[
-                      Text('Spending by Category', style: theme.textTheme.h4),
-                      const SizedBox(height: 12),
-                      ...analysisState.categoryBreakdown.entries
-                          .toList()
-                          .sorted((a, b) => b.value.compareTo(a.value))
-                          .map(
-                            (entry) => _buildCategoryRow(theme, entry.key, entry.value, analysisState.totalSpending),
-                          ),
-                    ],
-
-                    const SizedBox(height: 24),
-
-                    // Insights
-                    if (analysisState.insights.isNotEmpty) ...[
-                      Text('Insights', style: theme.textTheme.h4),
-                      const SizedBox(height: 12),
-                      ...analysisState.insights.map((insight) => _buildInsightCard(theme, insight)),
-                    ],
-                  ] else ...[
-                    // No data state
-                    Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                    // Summary Stats
+                    if (analysisState.hasData) ...[
+                      Row(
                         children: [
-                          const SizedBox(height: 48),
-                          Icon(LucideIcons.chartPie, size: 64, color: theme.colorScheme.mutedForeground),
-                          const SizedBox(height: 16),
-                          Text('No expense data', style: theme.textTheme.h4),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Scan some payment slips to see your analysis',
-                            style: theme.textTheme.small.copyWith(color: theme.colorScheme.mutedForeground),
+                          Expanded(
+                            child: _buildStatCard(
+                              theme,
+                              'Total',
+                              '${analysisState.totalSpending.toStringAsFixed(0)} ฿',
+                              FIcons.wallet,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildStatCard(
+                              theme,
+                              'Transactions',
+                              analysisState.transactionCount.toString(),
+                              FIcons.receipt,
+                            ),
                           ),
                         ],
                       ),
-                    ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildStatCard(
+                              theme,
+                              'Average',
+                              '${analysisState.averageTransaction.toStringAsFixed(0)} ฿',
+                              FIcons.calculator,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildStatCard(
+                              theme,
+                              'Top Category',
+                              _formatCategory(analysisState.topCategory ?? 'N/A'),
+                              FIcons.tag,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // Category Breakdown
+                      if (analysisState.categoryBreakdown.isNotEmpty) ...[
+                        Text('Spending by Category', style: theme.typography.xl),
+                        const SizedBox(height: 12),
+                        ...analysisState.categoryBreakdown.entries
+                            .toList()
+                            .sorted((a, b) => b.value.compareTo(a.value))
+                            .map(
+                              (entry) => _buildCategoryRow(theme, entry.key, entry.value, analysisState.totalSpending),
+                            ),
+                      ],
+
+                      const SizedBox(height: 24),
+
+                      // Insights
+                      if (analysisState.insights.isNotEmpty) ...[
+                        Text('Insights', style: theme.typography.xl),
+                        const SizedBox(height: 12),
+                        ...analysisState.insights.map((insight) => _buildInsightCard(theme, insight)),
+                      ],
+                    ] else ...[
+                      // No data state
+                      Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const SizedBox(height: 48),
+                            Icon(FIcons.chartPie, size: 64, color: theme.colors.mutedForeground),
+                            const SizedBox(height: 16),
+                            Text('No expense data', style: theme.typography.xl),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Scan some payment slips to see your analysis',
+                              style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
-                ],
-              ),
+                ),
+          // Ask AI Floating Action Button
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: FloatingActionButton.extended(
+              onPressed: cactusState.isModelLoaded
+                  ? () => context.router.push(ChatRoute(startDate: _startDate, endDate: _endDate))
+                  : null,
+              icon: const Icon(FIcons.messageCircle),
+              label: const Text('Ask AI'),
+              backgroundColor: cactusState.isModelLoaded ? theme.colors.primary : theme.colors.muted,
+              foregroundColor: cactusState.isModelLoaded
+                  ? theme.colors.primaryForeground
+                  : theme.colors.mutedForeground,
             ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: cactusState.isModelLoaded
-            ? () => context.router.push(ChatRoute(startDate: _startDate, endDate: _endDate))
-            : null,
-        icon: const Icon(LucideIcons.messageCircle),
-        label: const Text('Ask AI'),
-        backgroundColor: cactusState.isModelLoaded ? null : Colors.grey,
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildStatCard(ShadThemeData theme, String label, String value, IconData icon) {
-    return ShadCard(
+  Widget _buildStatCard(FThemeData theme, String label, String value, IconData icon) {
+    return FCard.raw(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -244,22 +247,22 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
           children: [
             Row(
               children: [
-                Icon(icon, size: 18, color: theme.colorScheme.primary),
+                Icon(icon, size: 18, color: theme.colors.primary),
                 const SizedBox(width: 8),
                 Flexible(
-                  child: Text(label, style: theme.textTheme.small, overflow: TextOverflow.ellipsis),
+                  child: Text(label, style: theme.typography.sm, overflow: TextOverflow.ellipsis),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            Text(value, style: theme.textTheme.h3),
+            Text(value, style: theme.typography.xl2),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildCategoryRow(ShadThemeData theme, String category, double amount, double total) {
+  Widget _buildCategoryRow(FThemeData theme, String category, double amount, double total) {
     final percentage = total > 0 ? (amount / total) : 0.0;
 
     return Padding(
@@ -273,20 +276,23 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
                 children: [
                   _getCategoryIcon(category, theme),
                   const SizedBox(width: 8),
-                  Text(_formatCategory(category), style: theme.textTheme.p),
+                  Text(_formatCategory(category), style: theme.typography.base),
                 ],
               ),
-              Text('${amount.toStringAsFixed(0)} ฿', style: theme.textTheme.p.copyWith(fontWeight: FontWeight.w500)),
+              Text(
+                '${amount.toStringAsFixed(0)} ฿',
+                style: theme.typography.base.copyWith(fontWeight: FontWeight.w500),
+              ),
             ],
           ),
           const SizedBox(height: 4),
-          LinearProgressIndicator(value: percentage, backgroundColor: theme.colorScheme.muted),
+          LinearProgressIndicator(value: percentage, backgroundColor: theme.colors.muted),
         ],
       ),
     );
   }
 
-  Widget _buildInsightCard(ShadThemeData theme, InsightData insight) {
+  Widget _buildInsightCard(FThemeData theme, InsightData insight) {
     Color getColor() {
       switch (insight.type) {
         case 'anomaly':
@@ -294,32 +300,32 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
         case 'suggestion':
           return Colors.blue;
         default:
-          return theme.colorScheme.primary;
+          return theme.colors.primary;
       }
     }
 
     IconData getIcon() {
       switch (insight.icon) {
         case 'trending_up':
-          return LucideIcons.trendingUp;
+          return FIcons.trendingUp;
         case 'trending_down':
-          return LucideIcons.trendingDown;
+          return FIcons.trendingDown;
         case 'alert':
-          return LucideIcons.triangleAlert;
+          return FIcons.triangleAlert;
         case 'chart':
-          return LucideIcons.chartBar;
+          return FIcons.chartBar;
         case 'lightbulb':
-          return LucideIcons.lightbulb;
+          return FIcons.lightbulb;
         case 'info':
-          return LucideIcons.info;
+          return FIcons.info;
         default:
-          return LucideIcons.sparkles;
+          return FIcons.sparkles;
       }
     }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: ShadCard(
+      child: FCard.raw(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -338,12 +344,9 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(insight.title, style: theme.textTheme.p.copyWith(fontWeight: FontWeight.w500)),
+                    Text(insight.title, style: theme.typography.base.copyWith(fontWeight: FontWeight.w500)),
                     const SizedBox(height: 4),
-                    Text(
-                      insight.description,
-                      style: theme.textTheme.small.copyWith(color: theme.colorScheme.mutedForeground),
-                    ),
+                    Text(insight.description, style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground)),
                   ],
                 ),
               ),
@@ -354,37 +357,37 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
     );
   }
 
-  Widget _getCategoryIcon(String category, ShadThemeData theme) {
+  Widget _getCategoryIcon(String category, FThemeData theme) {
     IconData icon;
     switch (category.toLowerCase()) {
       case 'food':
-        icon = LucideIcons.utensils;
+        icon = FIcons.utensils;
         break;
       case 'transport':
-        icon = LucideIcons.car;
+        icon = FIcons.car;
         break;
       case 'utilities':
-        icon = LucideIcons.zap;
+        icon = FIcons.zap;
         break;
       case 'shopping':
-        icon = LucideIcons.shoppingBag;
+        icon = FIcons.shoppingBag;
         break;
       case 'transfer':
-        icon = LucideIcons.arrowRightLeft;
+        icon = FIcons.arrowRightLeft;
         break;
       case 'entertainment':
-        icon = LucideIcons.gamepad2;
+        icon = FIcons.gamepad2;
         break;
       case 'health':
-        icon = LucideIcons.heart;
+        icon = FIcons.heart;
         break;
       case 'education':
-        icon = LucideIcons.graduationCap;
+        icon = FIcons.graduationCap;
         break;
       default:
-        icon = LucideIcons.circle;
+        icon = FIcons.circle;
     }
-    return Icon(icon, size: 18, color: theme.colorScheme.primary);
+    return Icon(icon, size: 18, color: theme.colors.primary);
   }
 
   String _formatCategory(String category) {

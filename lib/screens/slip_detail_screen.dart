@@ -1,7 +1,8 @@
 import 'dart:io';
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:forui/forui.dart';
+import 'package:intl/intl.dart';
 import '../models/payment_slip.dart';
 import '../services/database_service.dart';
 import '../services/platform_service.dart';
@@ -13,14 +14,25 @@ class SlipDetailScreen extends StatelessWidget {
   const SlipDetailScreen({super.key, required this.slip});
 
   Future<void> _deleteSlip(BuildContext context) async {
-    final confirm = await showShadDialog<bool>(
+    final confirm = await showFDialog<bool>(
       context: context,
-      builder: (dialogContext) => ShadDialog.alert(
+      builder: (dialogContext, style, animation) => FDialog(
+        style: (_) => style,
+        animation: animation,
+        direction: Axis.vertical,
         title: const Text('Delete Slip'),
-        description: const Text('Are you sure you want to delete this payment slip?'),
+        body: const Text('Are you sure you want to delete this payment slip?'),
         actions: [
-          ShadButton.outline(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          ShadButton.destructive(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Delete')),
+          FButton(
+            style: FButtonStyle.outline(),
+            onPress: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FButton(
+            style: FButtonStyle.destructive(),
+            onPress: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
@@ -32,15 +44,15 @@ class SlipDetailScreen extends StatelessWidget {
 
         if (context.mounted) {
           context.router.maybePop();
-          ShadSonner.of(
-            context,
-          ).show(const ShadToast(title: Text('Success'), description: Text('Slip deleted successfully')));
+          showFToast(
+            context: context,
+            title: const Text('Success'),
+            description: const Text('Slip deleted successfully'),
+          );
         }
       } catch (e) {
         if (context.mounted) {
-          ShadSonner.of(
-            context,
-          ).show(ShadToast(title: const Text('Error'), description: Text('Error deleting slip: $e')));
+          showFToast(context: context, title: const Text('Error'), description: Text('Error deleting slip: $e'));
         }
       }
     }
@@ -48,54 +60,42 @@ class SlipDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ShadTheme.of(context);
+    final theme = context.theme;
 
-    return Scaffold(
-      appBar: AppBar(
+    return FScaffold(
+      header: FHeader.nested(
         title: const Text('Slip Details'),
-        backgroundColor: theme.colorScheme.background,
-        foregroundColor: theme.colorScheme.foreground,
-        actions: [
-          ShadButton.destructive(
-            size: ShadButtonSize.sm,
-            onPressed: () => _deleteSlip(context),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [Icon(LucideIcons.trash2, size: 16), const SizedBox(width: 4), const Text('Delete')],
-            ),
-          ),
-          const SizedBox(width: 8),
-        ],
+        prefixes: [FHeaderAction.back(onPress: () => context.router.maybePop())],
+        suffixes: [FHeaderAction(icon: const Icon(FIcons.trash2), onPress: () => _deleteSlip(context))],
       ),
-      backgroundColor: theme.colorScheme.background,
-      body: ListView(
+      child: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
           // Amount Card
-          ShadCard(
+          FCard(
             title: const Text('Amount'),
-            description: Text(
+            subtitle: Text(
               '\$${slip.amount.toStringAsFixed(2)}',
-              style: theme.textTheme.h1.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+              style: theme.typography.xl4.copyWith(fontWeight: FontWeight.bold, color: theme.colors.primary),
             ),
           ),
           const SizedBox(height: 16),
 
           // Date Card
-          ShadCard(
+          FCard(
             title: const Text('Date'),
-            description: Text(DateFormat('MMMM dd, yyyy').format(slip.date), style: theme.textTheme.large),
+            subtitle: Text(DateFormat('MMMM dd, yyyy').format(slip.date), style: theme.typography.lg),
           ),
           const SizedBox(height: 16),
 
           // Image Preview
           if (File(slip.imagePath).existsSync()) ...[
-            Text('Receipt Image', style: theme.textTheme.h3),
+            Text('Receipt Image', style: theme.typography.xl2),
             const SizedBox(height: 8),
             Container(
               decoration: BoxDecoration(
-                border: Border.all(color: theme.colorScheme.border),
-                borderRadius: theme.radius,
+                border: Border.all(color: theme.colors.border),
+                borderRadius: theme.style.borderRadius,
               ),
               clipBehavior: Clip.antiAlias,
               child: Image.file(File(slip.imagePath), height: 300, width: double.infinity, fit: BoxFit.contain),
@@ -105,16 +105,16 @@ class SlipDetailScreen extends StatelessWidget {
 
           // Extracted Text
           if (slip.extractedText.isNotEmpty) ...[
-            Text('Extracted Text', style: theme.textTheme.h3),
+            Text('Extracted Text', style: theme.typography.xl2),
             const SizedBox(height: 8),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               constraints: const BoxConstraints(maxHeight: 200),
               decoration: BoxDecoration(
-                color: theme.colorScheme.card,
-                border: Border.all(color: theme.colorScheme.border),
-                borderRadius: theme.radius,
+                color: theme.colors.background,
+                border: Border.all(color: theme.colors.border),
+                borderRadius: theme.style.borderRadius,
               ),
               child: SingleChildScrollView(
                 child: Text(slip.extractedText, style: const TextStyle(fontFamily: 'monospace')),
@@ -125,9 +125,9 @@ class SlipDetailScreen extends StatelessWidget {
           const SizedBox(height: 16),
 
           // Metadata
-          ShadCard(
+          FCard(
             title: const Text('Scanned on'),
-            description: Text(DateFormat('MMM dd, yyyy hh:mm a').format(slip.createdAt), style: theme.textTheme.p),
+            subtitle: Text(DateFormat('MMM dd, yyyy hh:mm a').format(slip.createdAt), style: theme.typography.base),
           ),
         ],
       ),

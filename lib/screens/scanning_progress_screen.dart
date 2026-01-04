@@ -1,7 +1,7 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:forui/forui.dart';
 import '../providers/scanning_provider.dart';
 import '../providers/scanning_state.dart';
 
@@ -40,7 +40,7 @@ class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen>
 
   @override
   Widget build(BuildContext context) {
-    final theme = ShadTheme.of(context);
+    final theme = context.theme;
     final scanningState = ref.watch(scanningProvider);
 
     if (scanningState.error != null) {
@@ -50,28 +50,27 @@ class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen>
     return _buildProgressView(theme, scanningState);
   }
 
-  Widget _buildErrorView(ShadThemeData theme, String error) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Scanning Error'),
-        backgroundColor: theme.colorScheme.background,
-        foregroundColor: theme.colorScheme.foreground,
-      ),
-      backgroundColor: theme.colorScheme.background,
-      body: Center(
+  Widget _buildErrorView(FThemeData theme, String error) {
+    return FScaffold(
+      header: const FHeader(title: Text('Scanning Error')),
+      child: Center(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(LucideIcons.circleAlert, size: 64, color: theme.colorScheme.destructive),
+              Icon(FIcons.circleAlert, size: 64, color: theme.colors.destructive),
               const SizedBox(height: 16),
-              Text('Scanning Failed', style: theme.textTheme.h2),
+              Text('Scanning Failed', style: theme.typography.xl3),
               const SizedBox(height: 8),
-              Text(error, textAlign: TextAlign.center, style: theme.textTheme.muted),
+              Text(
+                error,
+                textAlign: TextAlign.center,
+                style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground),
+              ),
               const SizedBox(height: 24),
-              ShadButton(
-                onPressed: () {
+              FButton(
+                onPress: () {
                   ref.read(scanningProvider.notifier).reset();
                   context.router.maybePop(false);
                 },
@@ -84,19 +83,15 @@ class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen>
     );
   }
 
-  Widget _buildProgressView(ShadThemeData theme, ScanningState scanningState) {
-    return Scaffold(
-      appBar: AppBar(
+  Widget _buildProgressView(FThemeData theme, ScanningState scanningState) {
+    return FScaffold(
+      header: FHeader.nested(
         title: const Text('Scanning Photos'),
-        backgroundColor: theme.colorScheme.background,
-        foregroundColor: theme.colorScheme.foreground,
-        leading: ShadIconButton(
-          icon: const Icon(LucideIcons.x),
-          onPressed: scanningState.isScanning ? _cancelScanning : () => context.router.maybePop(false),
-        ),
+        prefixes: [
+          FHeaderAction.x(onPress: scanningState.isScanning ? _cancelScanning : () => context.router.maybePop(false)),
+        ],
       ),
-      backgroundColor: theme.colorScheme.background,
-      body: Center(
+      child: Center(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Column(
@@ -106,14 +101,14 @@ class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen>
               const SizedBox(height: 32),
               Text(
                 scanningState.isScanning ? 'Scanning your photos for payment slips...' : 'Processing results...',
-                style: theme.textTheme.large,
+                style: theme.typography.lg,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
               _buildStatsCard(theme, scanningState),
               const SizedBox(height: 32),
               if (scanningState.isScanning)
-                ShadButton.outline(onPressed: _cancelScanning, child: const Text('Cancel Scanning')),
+                FButton(style: FButtonStyle.outline(), onPress: _cancelScanning, child: const Text('Cancel Scanning')),
             ],
           ),
         ),
@@ -121,7 +116,7 @@ class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen>
     );
   }
 
-  Widget _buildProgressCircle(ShadThemeData theme, ScanningState scanningState) {
+  Widget _buildProgressCircle(FThemeData theme, ScanningState scanningState) {
     final progress = scanningState.progress;
     return SizedBox(
       width: 120,
@@ -131,15 +126,15 @@ class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen>
           CircularProgressIndicator(
             value: scanningState.isScanning ? progress : 1.0,
             strokeWidth: 8,
-            backgroundColor: theme.colorScheme.muted,
-            valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
+            backgroundColor: theme.colors.muted,
+            valueColor: AlwaysStoppedAnimation<Color>(theme.colors.primary),
           ),
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('${(progress * 100).toInt()}%', style: theme.textTheme.h2.copyWith(fontWeight: FontWeight.bold)),
-                if (scanningState.isScanning) Text('Scanning', style: theme.textTheme.small),
+                Text('${(progress * 100).toInt()}%', style: theme.typography.xl3.copyWith(fontWeight: FontWeight.bold)),
+                if (scanningState.isScanning) Text('Scanning', style: theme.typography.sm),
               ],
             ),
           ),
@@ -148,9 +143,8 @@ class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen>
     );
   }
 
-  Widget _buildStatsCard(ShadThemeData theme, ScanningState scanningState) {
-    return ShadCard(
-      width: double.infinity,
+  Widget _buildStatsCard(FThemeData theme, ScanningState scanningState) {
+    return FCard.raw(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -172,7 +166,7 @@ class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen>
                 const Text('Payment Slips Found:'),
                 Text(
                   '${scanningState.slipsFound}',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+                  style: TextStyle(fontWeight: FontWeight.bold, color: theme.colors.primary),
                 ),
               ],
             ),
@@ -183,14 +177,17 @@ class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen>
   }
 
   void _showCompletionDialog(int processed, int found) {
-    showShadDialog(
+    showFDialog(
       context: context,
-      builder: (dialogContext) => ShadDialog.alert(
+      builder: (dialogContext, style, animation) => FDialog(
+        style: (_) => style,
+        animation: animation,
         title: const Text('Scanning Complete'),
-        description: Text('Processed $processed photos and found $found payment slips.'),
+        body: Text('Processed $processed photos and found $found payment slips.'),
+        direction: Axis.vertical,
         actions: [
-          ShadButton(
-            onPressed: () {
+          FButton(
+            onPress: () {
               Navigator.of(dialogContext).pop(); // Close dialog
               ref.read(scanningProvider.notifier).reset();
               context.router.maybePop(true); // Return to home with refresh signal
@@ -210,7 +207,7 @@ class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen>
       }
     } catch (e) {
       if (mounted) {
-        ShadSonner.of(context).show(ShadToast(title: const Text('Error'), description: Text('Failed to cancel: $e')));
+        showFToast(context: context, title: const Text('Error'), description: Text('Failed to cancel: $e'));
       }
     }
   }

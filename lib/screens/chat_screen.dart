@@ -1,7 +1,7 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:forui/forui.dart';
 import '../providers/chat_provider.dart';
 import '../providers/chat_state.dart';
 import '../providers/cactus_provider.dart';
@@ -92,7 +92,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ShadTheme.of(context);
+    final theme = context.theme;
     final chatState = ref.watch(chatProvider);
     final cactusState = ref.watch(cactusProvider);
 
@@ -101,35 +101,33 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _scrollToBottom();
     });
 
-    return Scaffold(
-      appBar: AppBar(
+    return FScaffold(
+      header: FHeader.nested(
         title: const Text('AI Assistant'),
-        leading: ShadIconButton.ghost(
-          icon: Icon(LucideIcons.arrowLeft, color: theme.colorScheme.foreground),
-          onPressed: () => context.router.maybePop(),
-        ),
-        actions: [
+        prefixes: [FHeaderAction.back(onPress: () => context.router.maybePop())],
+        suffixes: [
           if (chatState.hasMessages)
-            ShadIconButton.ghost(
-              icon: Icon(LucideIcons.trash2, color: theme.colorScheme.foreground),
-              onPressed: () => ref.read(chatProvider.notifier).clearMessages(),
+            FHeaderAction(
+              icon: const Icon(FIcons.trash2),
+              onPress: () => ref.read(chatProvider.notifier).clearMessages(),
             ),
         ],
       ),
-      body: Column(
+      childPad: false,
+      child: Column(
         children: [
           // Date range indicator
           if (chatState.startDate != null || chatState.endDate != null)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: theme.colorScheme.muted,
+              color: theme.colors.muted,
               child: Row(
                 children: [
-                  Icon(LucideIcons.calendar, size: 16, color: theme.colorScheme.mutedForeground),
+                  Icon(FIcons.calendar, size: 16, color: theme.colors.mutedForeground),
                   const SizedBox(width: 8),
                   Text(
                     _formatDateRange(chatState.startDate, chatState.endDate),
-                    style: theme.textTheme.small.copyWith(color: theme.colorScheme.mutedForeground),
+                    style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground),
                   ),
                 ],
               ),
@@ -142,11 +140,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               child: Column(
                 children: [
                   if (cactusState.isLoading) ...[
-                    Text(cactusState.downloadStatus, style: theme.textTheme.small),
+                    Text(cactusState.downloadStatus, style: theme.typography.sm),
                     const SizedBox(height: 8),
                     LinearProgressIndicator(value: cactusState.isDownloading ? cactusState.downloadProgress : null),
                   ] else if (cactusState.error != null) ...[
-                    ShadAlert.destructive(title: const Text('Model Error'), description: Text(cactusState.error!)),
+                    FAlert(
+                      style: FAlertStyle.destructive(),
+                      title: const Text('Model Error'),
+                      subtitle: Text(cactusState.error!),
+                    ),
                   ] else ...[
                     const Text('Loading AI model...'),
                     const SizedBox(height: 8),
@@ -174,7 +176,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: theme.colorScheme.border)),
+              border: Border(top: BorderSide(color: theme.colors.border)),
             ),
             child: SafeArea(
               child: Row(
@@ -193,11 +195,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  ShadButton(
-                    onPressed: (cactusState.isModelLoaded && !chatState.isGenerating) ? _sendMessage : null,
+                  FButton(
+                    onPress: (cactusState.isModelLoaded && !chatState.isGenerating) ? _sendMessage : null,
                     child: chatState.isGenerating
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(LucideIcons.send),
+                        : const Icon(FIcons.send),
                   ),
                 ],
               ),
@@ -208,18 +210,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
-  Widget _buildEmptyState(ShadThemeData theme) {
+  Widget _buildEmptyState(FThemeData theme) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(LucideIcons.messageCircle, size: 64, color: theme.colorScheme.mutedForeground),
+          Icon(FIcons.messageCircle, size: 64, color: theme.colors.mutedForeground),
           const SizedBox(height: 16),
-          Text('Ask me about your expenses', style: theme.textTheme.h4),
+          Text('Ask me about your expenses', style: theme.typography.xl),
           const SizedBox(height: 8),
           Text(
             'I can help you understand spending patterns,\nfind specific transactions, and give budget advice.',
-            style: theme.textTheme.small.copyWith(color: theme.colorScheme.mutedForeground),
+            style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
@@ -248,7 +250,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
-  Widget _buildMessageBubble(ChatMessageModel message, ShadThemeData theme) {
+  Widget _buildMessageBubble(ChatMessageModel message, FThemeData theme) {
     final isUser = message.role == 'user';
 
     return Padding(
@@ -260,8 +262,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           if (!isUser) ...[
             CircleAvatar(
               radius: 16,
-              backgroundColor: theme.colorScheme.primary,
-              child: Icon(LucideIcons.bot, size: 18, color: theme.colorScheme.primaryForeground),
+              backgroundColor: theme.colors.primary,
+              child: Icon(FIcons.bot, size: 18, color: theme.colors.primaryForeground),
             ),
             const SizedBox(width: 8),
           ],
@@ -269,7 +271,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isUser ? theme.colorScheme.primary : theme.colorScheme.muted,
+                color: isUser ? theme.colors.primary : theme.colors.muted,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
@@ -277,8 +279,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 children: [
                   Text(
                     message.content.isEmpty && message.isStreaming ? '...' : message.content,
-                    style: theme.textTheme.p.copyWith(
-                      color: isUser ? theme.colorScheme.primaryForeground : theme.colorScheme.foreground,
+                    style: theme.typography.base.copyWith(
+                      color: isUser ? theme.colors.primaryForeground : theme.colors.foreground,
                     ),
                   ),
                   if (message.isStreaming)
@@ -290,7 +292,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           valueColor: AlwaysStoppedAnimation(
-                            isUser ? theme.colorScheme.primaryForeground : theme.colorScheme.primary,
+                            isUser ? theme.colors.primaryForeground : theme.colors.primary,
                           ),
                         ),
                       ),
@@ -303,8 +305,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             const SizedBox(width: 8),
             CircleAvatar(
               radius: 16,
-              backgroundColor: theme.colorScheme.muted,
-              child: Icon(LucideIcons.user, size: 18, color: theme.colorScheme.mutedForeground),
+              backgroundColor: theme.colors.muted,
+              child: Icon(FIcons.user, size: 18, color: theme.colors.mutedForeground),
             ),
           ],
         ],

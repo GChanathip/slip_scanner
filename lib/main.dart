@@ -1,8 +1,6 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:forui/forui.dart';
 import 'router/app_router.dart';
 import 'package:cactus/cactus.dart';
 
@@ -23,12 +21,23 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return ShadApp.router(
+    return MaterialApp.router(
       title: 'Payment Slip Scanner',
       debugShowCheckedModeBanner: false,
-      theme: ShadThemeData(brightness: Brightness.light, colorScheme: const ShadZincColorScheme.light()),
-      darkTheme: ShadThemeData(brightness: Brightness.dark, colorScheme: const ShadZincColorScheme.dark()),
+      locale: const Locale('en', 'US'),
+      localizationsDelegates: FLocalizations.localizationsDelegates,
+      supportedLocales: FLocalizations.supportedLocales,
+      theme: FThemes.zinc.light.toApproximateMaterialTheme(),
+      darkTheme: FThemes.zinc.dark.toApproximateMaterialTheme(),
       themeMode: ThemeMode.system,
+      builder: (context, child) {
+        final brightness = MediaQuery.platformBrightnessOf(context);
+        final theme = brightness == Brightness.dark ? FThemes.zinc.dark : FThemes.zinc.light;
+        return FTheme(
+          data: theme,
+          child: FToaster(child: child!),
+        );
+      },
       routerConfig: _appRouter.config(),
     );
   }

@@ -2,7 +2,8 @@ import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:forui/forui.dart';
+import 'package:intl/intl.dart';
 import '../models/payment_slip.dart';
 import '../router/app_router.dart';
 import '../services/database_service.dart';
@@ -87,21 +88,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
     } else if (status.isPermanentlyDenied) {
       if (mounted) {
-        ShadSonner.of(context).show(
-          ShadToast(
-            title: const Text('Photo Access Denied'),
-            description: const Text('Please enable photo access in Settings.'),
-            action: ShadButton.ghost(child: const Text('Settings'), onPressed: () => openAppSettings()),
-          ),
+        showFToast(
+          context: context,
+          title: const Text('Photo Access Denied'),
+          description: const Text('Please enable photo access in Settings.'),
         );
       }
     } else {
       if (mounted) {
-        ShadSonner.of(context).show(
-          const ShadToast(
-            title: Text('Permission Required'),
-            description: Text('Photo library access is required to scan payment slips'),
-          ),
+        showFToast(
+          context: context,
+          title: const Text('Permission Required'),
+          description: const Text('Photo library access is required to scan payment slips'),
         );
       }
     }
@@ -109,41 +107,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ShadTheme.of(context);
+    final theme = context.theme;
     final currentMonthTotal = _monthlyTotals[DateFormat('yyyy-MM').format(DateTime.now())] ?? 0.0;
-    final scanningState = ref.watch(scanningProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Payment Slip Scanner'),
-        backgroundColor: theme.colorScheme.background,
-        foregroundColor: theme.colorScheme.foreground,
-        actions: [
-          // Show scanning indicator if scanning in background
-          if (scanningState.isScanning)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Center(
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text('Scanning...', style: theme.textTheme.small),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-      backgroundColor: theme.colorScheme.background,
-      body: _isLoading
+    return FScaffold(
+      header: const FHeader(title: Text('Payment Slip Scanner')),
+      child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: () async {
@@ -154,15 +123,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16.0),
                 children: [
-                  // Scan All Photos Card - Use GestureDetector + ShadCard
+                  // Scan All Photos Card - Use GestureDetector + Container
                   GestureDetector(
                     onTap: _startScanAllPhotos,
                     child: Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [theme.colorScheme.primary, theme.colorScheme.primary.withValues(alpha: 0.8)],
+                          colors: [theme.colors.primary, theme.colors.primary.withValues(alpha: 0.8)],
                         ),
-                        borderRadius: theme.radius,
+                        borderRadius: theme.style.borderRadius,
                       ),
                       padding: const EdgeInsets.all(20.0),
                       child: Row(
@@ -173,7 +142,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               color: Colors.white.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Icon(LucideIcons.images, color: theme.colorScheme.primaryForeground, size: 32),
+                            child: Icon(FIcons.images, color: theme.colors.primaryForeground, size: 32),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
@@ -183,7 +152,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 Text(
                                   _hasScannedBefore ? 'Scan New Photos' : 'Scan All Photos',
                                   style: TextStyle(
-                                    color: theme.colorScheme.primaryForeground,
+                                    color: theme.colors.primaryForeground,
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -194,14 +163,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       ? 'Find new payment slips in your photos'
                                       : 'Automatically find payment slips in your photo library',
                                   style: TextStyle(
-                                    color: theme.colorScheme.primaryForeground.withValues(alpha: 0.9),
+                                    color: theme.colors.primaryForeground.withValues(alpha: 0.9),
                                     fontSize: 14,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          Icon(LucideIcons.arrowRight, color: theme.colorScheme.primaryForeground),
+                          Icon(FIcons.arrowRight, color: theme.colors.primaryForeground),
                         ],
                       ),
                     ),
@@ -215,12 +184,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     child: Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [
-                            theme.colorScheme.secondary,
-                            theme.colorScheme.secondary.withValues(alpha: 0.8),
-                          ],
+                          colors: [theme.colors.secondary, theme.colors.secondary.withValues(alpha: 0.8)],
                         ),
-                        borderRadius: theme.radius,
+                        borderRadius: theme.style.borderRadius,
                       ),
                       padding: const EdgeInsets.all(20.0),
                       child: Row(
@@ -228,10 +194,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: theme.colorScheme.secondaryForeground.withValues(alpha: 0.2),
+                              color: theme.colors.secondaryForeground.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Icon(LucideIcons.sparkles, color: theme.colorScheme.secondaryForeground, size: 32),
+                            child: Icon(FIcons.sparkles, color: theme.colors.secondaryForeground, size: 32),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
@@ -241,7 +207,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 Text(
                                   'AI Expense Analysis',
                                   style: TextStyle(
-                                    color: theme.colorScheme.secondaryForeground,
+                                    color: theme.colors.secondaryForeground,
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -250,14 +216,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 Text(
                                   'Get insights and chat with AI about your spending',
                                   style: TextStyle(
-                                    color: theme.colorScheme.secondaryForeground.withValues(alpha: 0.9),
+                                    color: theme.colors.secondaryForeground.withValues(alpha: 0.9),
                                     fontSize: 14,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          Icon(LucideIcons.arrowRight, color: theme.colorScheme.secondaryForeground),
+                          Icon(FIcons.arrowRight, color: theme.colors.secondaryForeground),
                         ],
                       ),
                     ),
@@ -273,8 +239,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(
-                              color: theme.colorScheme.muted,
-                              borderRadius: theme.radius,
+                              color: theme.colors.muted,
+                              borderRadius: theme.style.borderRadius,
                             ),
                             child: Row(
                               children: [
@@ -283,13 +249,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   height: 14,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation(theme.colorScheme.primary),
+                                    valueColor: AlwaysStoppedAnimation(theme.colors.primary),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
                                   '${extractionState.pendingCount} slips pending AI analysis',
-                                  style: theme.textTheme.small,
+                                  style: theme.typography.sm,
                                 ),
                               ],
                             ),
@@ -304,26 +270,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                   // Current Month Summary Card
                   if (_monthlyTotals.isNotEmpty) ...[
-                    ShadCard(
+                    FCard(
                       title: const Text("This Month's Spending"),
-                      description: Text(
+                      subtitle: Text(
                         '\$${currentMonthTotal.toStringAsFixed(2)}',
-                        style: theme.textTheme.h1.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: theme.typography.xl4.copyWith(color: theme.colors.primary, fontWeight: FontWeight.bold),
                       ),
-                      footer: ShadButton.ghost(
-                        onPressed: () {
-                          context.router.push(MonthlyViewRoute(month: DateTime.now())).then((_) => _loadData());
-                        },
-                        child: Row(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: FButton(
+                          style: FButtonStyle.ghost(),
+                          onPress: () {
+                            context.router.push(MonthlyViewRoute(month: DateTime.now())).then((_) => _loadData());
+                          },
                           mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text('View Details'),
-                            const SizedBox(width: 4),
-                            Icon(LucideIcons.arrowRight, size: 16),
-                          ],
+                          suffix: Icon(FIcons.arrowRight, size: 16),
+                          child: const Text('View Details'),
                         ),
                       ),
                     ),
@@ -332,7 +294,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                   // Monthly Totals or Welcome Message
                   if (_monthlyTotals.isNotEmpty) ...[
-                    Text('Monthly Summary', style: theme.textTheme.h3),
+                    Text('Monthly Summary', style: theme.typography.xl2),
                     const SizedBox(height: 8),
                     ..._monthlyTotals.entries.take(3).map((entry) {
                       final month = DateTime.parse('${entry.key}-01');
@@ -346,16 +308,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              border: Border.all(color: theme.colorScheme.border),
-                              borderRadius: theme.radius,
+                              border: Border.all(color: theme.colors.border),
+                              borderRadius: theme.style.borderRadius,
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(DateFormat('MMMM yyyy').format(month), style: theme.textTheme.p),
+                                Text(DateFormat('MMMM yyyy').format(month), style: theme.typography.base),
                                 Text(
                                   '\$${entry.value.toStringAsFixed(2)}',
-                                  style: theme.textTheme.p.copyWith(fontWeight: FontWeight.bold),
+                                  style: theme.typography.base.copyWith(fontWeight: FontWeight.bold),
                                 ),
                               ],
                             ),
@@ -366,10 +328,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     const SizedBox(height: 24),
                   ] else ...[
                     // Welcome/Getting Started Section
-                    ShadAlert(
-                      icon: Icon(LucideIcons.lightbulb, color: theme.colorScheme.primary),
+                    FAlert(
+                      icon: Icon(FIcons.lightbulb, color: theme.colors.primary),
                       title: const Text('Getting Started'),
-                      description: const Text(
+                      subtitle: const Text(
                         'Welcome to Payment Slip Scanner! This app automatically finds and tracks payment slips in your photo library.\n\n'
                         '• Tap "Scan All Photos" to start\n'
                         '• The app will find payment amounts and dates\n'
@@ -382,7 +344,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                   // Recent Slips
                   if (_recentSlips.isNotEmpty) ...[
-                    Text('Recent Slips', style: theme.textTheme.h3),
+                    Text('Recent Slips', style: theme.typography.xl2),
                     const SizedBox(height: 8),
                     ..._recentSlips.map((slip) {
                       return Padding(
@@ -395,9 +357,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: theme.colorScheme.card,
-                              border: Border.all(color: theme.colorScheme.border),
-                              borderRadius: theme.radius,
+                              color: theme.colors.background,
+                              border: Border.all(color: theme.colors.border),
+                              borderRadius: theme.style.borderRadius,
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -407,13 +369,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   children: [
                                     Text(
                                       '\$${slip.amount.toStringAsFixed(2)}',
-                                      style: theme.textTheme.large.copyWith(fontWeight: FontWeight.bold),
+                                      style: theme.typography.lg.copyWith(fontWeight: FontWeight.bold),
                                     ),
                                     const SizedBox(height: 4),
-                                    Text(DateFormat('MMM dd, yyyy').format(slip.date), style: theme.textTheme.muted),
+                                    Text(
+                                      DateFormat('MMM dd, yyyy').format(slip.date),
+                                      style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground),
+                                    ),
                                   ],
                                 ),
-                                Icon(LucideIcons.chevronRight, size: 20, color: theme.colorScheme.mutedForeground),
+                                Icon(FIcons.chevronRight, size: 20, color: theme.colors.mutedForeground),
                               ],
                             ),
                           ),

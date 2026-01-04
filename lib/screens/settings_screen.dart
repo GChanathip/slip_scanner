@@ -2,7 +2,7 @@ import 'package:auto_route/auto_route.dart';
 import 'package:cactus/cactus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:forui/forui.dart';
 import 'package:slip_scanner/providers/cactus_state.dart';
 import '../providers/cactus_provider.dart';
 import '../providers/extraction_provider.dart';
@@ -46,25 +46,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ShadTheme.of(context);
+    final theme = context.theme;
     final cactusState = ref.watch(cactusProvider);
     final extractionState = ref.watch(extractionQueueProvider);
 
-    return Scaffold(
-      appBar: AppBar(
+    return FScaffold(
+      header: FHeader.nested(
         title: const Text('AI Settings'),
-        leading: ShadIconButton.ghost(
-          icon: Icon(LucideIcons.arrowLeft, color: theme.colorScheme.foreground),
-          onPressed: () => context.router.maybePop(),
-        ),
+        prefixes: [FHeaderAction.back(onPress: () => context.router.maybePop())],
       ),
-      body: ListView(
+      child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           // Model Status Card
-          ShadCard(
+          FCard(
             title: const Text('AI Model'),
-            description: Text(
+            subtitle: Text(
               cactusState.isModelLoaded ? 'Model loaded and ready' : 'Select a model to enable AI features',
             ),
             child: Column(
@@ -74,14 +71,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 if (cactusState.isModelLoaded) ...[
                   Row(
                     children: [
-                      Icon(LucideIcons.check, color: Colors.green, size: 20),
+                      Icon(FIcons.check, color: Colors.green, size: 20),
                       const SizedBox(width: 8),
-                      Text('Current: ${cactusState.selectedModel}', style: theme.textTheme.p),
+                      Text('Current: ${cactusState.selectedModel}', style: theme.typography.base),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  ShadButton.outline(
-                    onPressed: () {
+                  FButton(
+                    style: FButtonStyle.outline(),
+                    onPress: () {
                       ref.read(cactusProvider.notifier).unloadModel();
                       ref.read(extractionQueueProvider.notifier).stopBackgroundProcessing();
                     },
@@ -91,18 +89,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(cactusState.downloadStatus, style: theme.textTheme.small),
+                      Text(cactusState.downloadStatus, style: theme.typography.sm),
                       const SizedBox(height: 8),
                       LinearProgressIndicator(value: cactusState.isDownloading ? cactusState.downloadProgress : null),
                     ],
                   ),
                 ] else if (cactusState.error != null) ...[
-                  ShadAlert.destructive(title: const Text('Error'), description: Text(cactusState.error!)),
-                  const SizedBox(height: 12),
-                  ShadButton(
-                    onPressed: () => ref.read(cactusProvider.notifier).clearError(),
-                    child: const Text('Dismiss'),
+                  FAlert(
+                    style: FAlertStyle.destructive(),
+                    title: const Text('Error'),
+                    subtitle: Text(cactusState.error!),
                   ),
+                  const SizedBox(height: 12),
+                  FButton(onPress: () => ref.read(cactusProvider.notifier).clearError(), child: const Text('Dismiss')),
                 ],
               ],
             ),
@@ -111,9 +110,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 16),
 
           // Available Models Card
-          ShadCard(
+          FCard(
             title: const Text('Available Models'),
-            description: const Text('Choose a model to download and use'),
+            subtitle: const Text('Choose a model to download and use'),
             child: Column(
               children: [
                 const SizedBox(height: 12),
@@ -130,9 +129,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 16),
 
           // Background Processing Card
-          ShadCard(
+          FCard(
             title: const Text('Background Processing'),
-            description: const Text('LLM extraction runs in background after scanning'),
+            subtitle: const Text('LLM extraction runs in background after scanning'),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -143,8 +142,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 _buildStatRow('Status', extractionState.isProcessing ? 'Running' : 'Stopped'),
                 if (extractionState.failedCount > 0) ...[
                   const SizedBox(height: 12),
-                  ShadButton.outline(
-                    onPressed: () {
+                  FButton(
+                    style: FButtonStyle.outline(),
+                    onPress: () {
                       ref.read(extractionQueueProvider.notifier).retryFailed();
                     },
                     child: const Text('Retry Failed'),
@@ -159,7 +159,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildModelTile(CactusModel model, CactusState cactusState) {
-    final theme = ShadTheme.of(context);
+    final theme = context.theme;
     final isSelected = cactusState.selectedModel == model.slug;
     final isLoading = cactusState.isLoading && cactusState.selectedModel == model.slug;
 
@@ -176,7 +176,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     Flexible(
                       child: Text(
                         model.name,
-                        style: theme.textTheme.p.copyWith(fontWeight: FontWeight.w500),
+                        style: theme.typography.base.copyWith(fontWeight: FontWeight.w500),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -188,26 +188,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           color: Colors.green.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: Text('Downloaded', style: theme.textTheme.small.copyWith(color: Colors.green)),
+                        child: Text('Downloaded', style: theme.typography.sm.copyWith(color: Colors.green)),
                       ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '${model.sizeMb} MB${model.supportsToolCalling ? ' • Tools' : ''}${model.supportsVision ? ' • Vision' : ''}',
-                  style: theme.textTheme.small.copyWith(color: theme.colorScheme.mutedForeground),
+                  style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground),
                 ),
               ],
             ),
           ),
           if (isSelected && cactusState.isModelLoaded)
-            Icon(LucideIcons.check, color: Colors.green)
+            Icon(FIcons.check, color: Colors.green)
           else if (isLoading)
             const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
           else
-            ShadButton(
-              size: ShadButtonSize.sm,
-              onPressed: cactusState.isLoading
+            FButton(
+              onPress: cactusState.isLoading
                   ? null
                   : () async {
                       await ref.read(cactusProvider.notifier).downloadAndInitialize(model.slug);
@@ -224,14 +223,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _buildStatRow(String label, String value) {
-    final theme = ShadTheme.of(context);
+    final theme = context.theme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: theme.textTheme.small),
-          Text(value, style: theme.textTheme.p.copyWith(fontWeight: FontWeight.w500)),
+          Text(label, style: theme.typography.sm),
+          Text(value, style: theme.typography.base.copyWith(fontWeight: FontWeight.w500)),
         ],
       ),
     );
