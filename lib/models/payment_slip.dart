@@ -7,6 +7,13 @@ class PaymentSlip {
   final String extractedText;
   final DateTime createdAt;
 
+  // OCR-extracted fields (multi-bank)
+  final String? senderName;
+  final String? referenceId;
+  final String? senderAccount;
+  final String? receiverAccount;
+  final String? transactionTime;
+
   // LLM-extracted fields
   final String? recipientName;
   final String? notes;
@@ -25,6 +32,11 @@ class PaymentSlip {
     required this.date,
     required this.extractedText,
     required this.createdAt,
+    this.senderName,
+    this.referenceId,
+    this.senderAccount,
+    this.receiverAccount,
+    this.transactionTime,
     this.recipientName,
     this.notes,
     this.category,
@@ -42,6 +54,11 @@ class PaymentSlip {
       'date': date.toIso8601String(),
       'extractedText': extractedText,
       'createdAt': createdAt.toIso8601String(),
+      'senderName': senderName,
+      'referenceId': referenceId,
+      'senderAccount': senderAccount,
+      'receiverAccount': receiverAccount,
+      'transactionTime': transactionTime,
       'recipientName': recipientName,
       'notes': notes,
       'category': category,
@@ -60,6 +77,11 @@ class PaymentSlip {
       date: DateTime.parse(map['date']),
       extractedText: map['extractedText'],
       createdAt: DateTime.parse(map['createdAt']),
+      senderName: map['senderName'],
+      referenceId: map['referenceId'],
+      senderAccount: map['senderAccount'],
+      receiverAccount: map['receiverAccount'],
+      transactionTime: map['transactionTime'],
       recipientName: map['recipientName'],
       notes: map['notes'],
       category: map['category'],
@@ -78,6 +100,11 @@ class PaymentSlip {
     DateTime? date,
     String? extractedText,
     DateTime? createdAt,
+    String? senderName,
+    String? referenceId,
+    String? senderAccount,
+    String? receiverAccount,
+    String? transactionTime,
     String? recipientName,
     String? notes,
     String? category,
@@ -93,6 +120,11 @@ class PaymentSlip {
       date: date ?? this.date,
       extractedText: extractedText ?? this.extractedText,
       createdAt: createdAt ?? this.createdAt,
+      senderName: senderName ?? this.senderName,
+      referenceId: referenceId ?? this.referenceId,
+      senderAccount: senderAccount ?? this.senderAccount,
+      receiverAccount: receiverAccount ?? this.receiverAccount,
+      transactionTime: transactionTime ?? this.transactionTime,
       recipientName: recipientName ?? this.recipientName,
       notes: notes ?? this.notes,
       category: category ?? this.category,

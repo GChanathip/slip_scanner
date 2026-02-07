@@ -7,7 +7,9 @@ import Photos
 private struct RegexPatterns {
     static let amountPatterns: [NSRegularExpression] = {
         let patterns = [
-            #"จำนวนเงิน\s*(\d{1,3}(?:,\d{3})*\.\d{2})"#,
+            #"จำนวนเงิน\s*([\d,]+\.\d{2})"#,
+            #"Amount\s*\n?\s*([\d,]+\.\d{2})"#,
+            #"([\d,]+\.\d{2})\s*THB"#,
             #"จำนวน:\s*(\d{1,3}(?:,\d{3})*\.\d{2})\s*บาท"#,
             #"จำนวน\s+(\d{1,3}(?:,\d{3})*\.\d{2})\s*บาท"#,
             #"(\d{1,3}(?:,\d{3})*\.\d{2})\s*บาท"#,
@@ -57,6 +59,74 @@ private struct RegexPatterns {
 
     static let twoDigitBuddhistYear: NSRegularExpression = {
         try! NSRegularExpression(pattern: #"\b([6-7]\d)\b"#)
+    }()
+
+    // MARK: - Multi-Bank Patterns
+
+    // Reference / Transaction ID (SCB, K Plus, Make by KBank, Dime)
+    static let referenceIdPatterns: [NSRegularExpression] = {
+        let patterns = [
+            #"รหัสอ้างอิง\s*:?\s*([A-Za-z0-9]+)"#,
+            #"เลขที่รายการ:?\s*([A-Za-z0-9]+)"#,
+            #"Transaction ID:\s*([A-Za-z0-9]+)"#,
+            #"Slip ID\s+(\d+)"#,
+        ]
+        return patterns.compactMap { try? NSRegularExpression(pattern: $0) }
+    }()
+
+    // Sender Name - label-based (SCB, Dime)
+    static let senderNamePatterns: [NSRegularExpression] = {
+        let patterns: [(String, NSRegularExpression.Options)] = [
+            (#"จาก\n(.*?)(?=\n|xxx)"#, [.dotMatchesLineSeparators]),
+            (#"From\s*\n?(.+?)(?=\n|x-)"#, [.dotMatchesLineSeparators]),
+        ]
+        return patterns.compactMap { try? NSRegularExpression(pattern: $0.0, options: $0.1) }
+    }()
+
+    // Receiver Name - label-based (SCB, Dime)
+    static let receiverNamePatterns: [NSRegularExpression] = {
+        let patterns: [(String, NSRegularExpression.Options)] = [
+            (#"ไปยัง\n(.*?)(?=\n|xxx)"#, [.dotMatchesLineSeparators]),
+            (#"To\s*\n?(.+?)(?=\n|x-)"#, [.dotMatchesLineSeparators]),
+        ]
+        return patterns.compactMap { try? NSRegularExpression(pattern: $0.0, options: $0.1) }
+    }()
+
+    // KBank Make: name is directly above account mask
+    static let kbankMakeNamePattern: NSRegularExpression = {
+        try! NSRegularExpression(
+            pattern: #"(.*?)\n(?=xxx-x-x\d{4}-x)"#,
+            options: [.dotMatchesLineSeparators]
+        )
+    }()
+
+    // K Plus: name is TWO lines above mask (skip bank name line)
+    static let kbankPlusNamePattern: NSRegularExpression = {
+        try! NSRegularExpression(
+            pattern: #"(.*?)\n(?:.*?)\n(?=xxx-x-x\d{4}-x)"#,
+            options: [.dotMatchesLineSeparators]
+        )
+    }()
+
+    // Account Number masks (SCB, KBank Make/K Plus, Dime)
+    static let accountNumberPatterns: [NSRegularExpression] = {
+        let patterns = [
+            #"xxx-xxx(\d{3,4}-?\d?)"#,
+            #"xxx-x-x(\d{4})-x"#,
+            #"x-(\d{4})"#,
+        ]
+        return patterns.compactMap { try? NSRegularExpression(pattern: $0) }
+    }()
+
+    // Date-Time combined patterns (group1=date, group2=time)
+    static let dateTimePatterns: [NSRegularExpression] = {
+        let patterns = [
+            #"(\d{1,2}\s+[^\s]+\s+\d{4})\s*-\s*(\d{1,2}:\d{2})"#,
+            #"Date\s+(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\s+-\s+(\d{1,2}:\d{2}\s+[AP]M)"#,
+            #"(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\s+(\d{1,2}:\d{2})"#,
+            #"(\d{1,2}\s+[^\s]+\.?\s+\d{2})\s+(\d{1,2}:\d{2})"#,
+        ]
+        return patterns.compactMap { try? NSRegularExpression(pattern: $0) }
     }()
 }
 
@@ -339,12 +409,27 @@ private struct RegexPatterns {
                 dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
                 dateFormatter.timeZone = TimeZone(abbreviation: "UTC")
 
+                // Extract multi-bank fields from full text
+                let referenceId = self.extractReferenceId(extractedText)
+                let senderName = self.extractSenderName(extractedText)
+                let receiverName = self.extractReceiverName(extractedText)
+                let time = self.extractTimeFromText(extractedText)
+                let accounts = self.extractAccountNumbers(extractedText)
+                let senderAccount = accounts.count > 0 ? accounts[0] : nil
+                let receiverAccount = accounts.count > 1 ? accounts[1] : nil
+
                 return [
                     "text": String(extractedText.prefix(10000)),
                     "amount": foundAmount,
                     "date": String((date ?? "").prefix(50)),
                     "assetId": String(assetId.prefix(100)),
-                    "createdAt": dateFormatter.string(from: Date())
+                    "createdAt": dateFormatter.string(from: Date()),
+                    "referenceId": referenceId ?? "",
+                    "senderName": senderName ?? "",
+                    "receiverName": receiverName ?? "",
+                    "senderAccount": senderAccount ?? "",
+                    "receiverAccount": receiverAccount ?? "",
+                    "time": time ?? "",
                 ]
             }
         } catch {
@@ -423,12 +508,27 @@ private struct RegexPatterns {
             do {
                 try requestHandler.perform([request])
 
+                // Extract multi-bank fields from full text
+                let referenceId = self.extractReferenceId(extractedText)
+                let senderName = self.extractSenderName(extractedText)
+                let receiverName = self.extractReceiverName(extractedText)
+                let time = self.extractTimeFromText(extractedText)
+                let accounts = self.extractAccountNumbers(extractedText)
+                let senderAccount = accounts.count > 0 ? accounts[0] : nil
+                let receiverAccount = accounts.count > 1 ? accounts[1] : nil
+
                 DispatchQueue.main.async {
                     result([
                         "text": extractedText,
                         "amount": amount ?? 0.0,
                         "date": date ?? "",
-                        "imagePath": imagePath
+                        "imagePath": imagePath,
+                        "referenceId": referenceId ?? "",
+                        "senderName": senderName ?? "",
+                        "receiverName": receiverName ?? "",
+                        "senderAccount": senderAccount ?? "",
+                        "receiverAccount": receiverAccount ?? "",
+                        "time": time ?? "",
                     ])
                 }
             } catch {
@@ -484,6 +584,18 @@ private struct RegexPatterns {
         let nsText = text as NSString
         let range = NSRange(location: 0, length: nsText.length)
 
+        // Try combined date-time patterns first (SCB, Make, K Plus, Dime)
+        for regex in RegexPatterns.dateTimePatterns {
+            if let match = regex.firstMatch(in: text, options: [], range: range),
+               match.numberOfRanges > 1 {
+                let dateString = nsText.substring(with: match.range(at: 1))
+                if containsBuddhistYear(dateString) {
+                    return convertBuddhistToGregorian(dateString)
+                }
+                return dateString
+            }
+        }
+
         for (regex, _) in RegexPatterns.thaiMonthPatterns {
             if let match = regex.firstMatch(in: text, options: [], range: range) {
                 let dateString = nsText.substring(with: match.range)
@@ -497,6 +609,115 @@ private struct RegexPatterns {
         for regex in RegexPatterns.datePatterns {
             if let match = regex.firstMatch(in: text, options: [], range: range) {
                 return nsText.substring(with: match.range)
+            }
+        }
+        return nil
+    }
+
+    private func extractReferenceId(_ text: String) -> String? {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        for regex in RegexPatterns.referenceIdPatterns {
+            if let match = regex.firstMatch(in: text, options: [], range: range),
+               match.numberOfRanges > 1 {
+                return nsText.substring(with: match.range(at: 1))
+            }
+        }
+        return nil
+    }
+
+    private func extractSenderName(_ text: String) -> String? {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        // Try label-based patterns first (SCB: จาก, Dime: From)
+        for regex in RegexPatterns.senderNamePatterns {
+            if let match = regex.firstMatch(in: text, options: [], range: range),
+               match.numberOfRanges > 1 {
+                let name = nsText.substring(with: match.range(at: 1))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty { return name }
+            }
+        }
+
+        // Try K Plus anchor (name 2 lines above mask) — match #1 is sender
+        let kplusMatches = RegexPatterns.kbankPlusNamePattern.matches(in: text, options: [], range: range)
+        if kplusMatches.count > 0, kplusMatches[0].numberOfRanges > 1 {
+            let name = nsText.substring(with: kplusMatches[0].range(at: 1))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !name.isEmpty { return name }
+        }
+
+        // Try Make anchor (name directly above mask) — match #1 is sender
+        let makeMatches = RegexPatterns.kbankMakeNamePattern.matches(in: text, options: [], range: range)
+        if makeMatches.count > 0, makeMatches[0].numberOfRanges > 1 {
+            let name = nsText.substring(with: makeMatches[0].range(at: 1))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !name.isEmpty { return name }
+        }
+
+        return nil
+    }
+
+    private func extractReceiverName(_ text: String) -> String? {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        // Try label-based patterns first (SCB: ไปยัง, Dime: To)
+        for regex in RegexPatterns.receiverNamePatterns {
+            if let match = regex.firstMatch(in: text, options: [], range: range),
+               match.numberOfRanges > 1 {
+                let name = nsText.substring(with: match.range(at: 1))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty { return name }
+            }
+        }
+
+        // Try K Plus anchor — match #2 is receiver
+        let kplusMatches = RegexPatterns.kbankPlusNamePattern.matches(in: text, options: [], range: range)
+        if kplusMatches.count > 1, kplusMatches[1].numberOfRanges > 1 {
+            let name = nsText.substring(with: kplusMatches[1].range(at: 1))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !name.isEmpty { return name }
+        }
+
+        // Try Make anchor — match #2 is receiver
+        let makeMatches = RegexPatterns.kbankMakeNamePattern.matches(in: text, options: [], range: range)
+        if makeMatches.count > 1, makeMatches[1].numberOfRanges > 1 {
+            let name = nsText.substring(with: makeMatches[1].range(at: 1))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !name.isEmpty { return name }
+        }
+
+        return nil
+    }
+
+    private func extractAccountNumbers(_ text: String) -> [String] {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        // Try each pattern; for the first one that matches, return all group 1 captures
+        for regex in RegexPatterns.accountNumberPatterns {
+            let matches = regex.matches(in: text, options: [], range: range)
+            if !matches.isEmpty {
+                return matches.compactMap { match in
+                    guard match.numberOfRanges > 1 else { return nil }
+                    return nsText.substring(with: match.range(at: 1))
+                }
+            }
+        }
+        return []
+    }
+
+    private func extractTimeFromText(_ text: String) -> String? {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        for regex in RegexPatterns.dateTimePatterns {
+            if let match = regex.firstMatch(in: text, options: [], range: range),
+               match.numberOfRanges > 2 {
+                return nsText.substring(with: match.range(at: 2))
             }
         }
         return nil

@@ -16,7 +16,7 @@ class DatabaseService {
     String path = join(await getDatabasesPath(), 'payment_slips.db');
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -35,6 +35,11 @@ class DatabaseService {
         recipientName TEXT,
         notes TEXT,
         category TEXT,
+        senderName TEXT,
+        referenceId TEXT,
+        senderAccount TEXT,
+        receiverAccount TEXT,
+        transactionTime TEXT,
         llmProcessingStatus TEXT DEFAULT 'pending',
         ragIndexed INTEGER DEFAULT 0,
         updatedAt TEXT
@@ -49,6 +54,11 @@ class DatabaseService {
     // Create index for LLM processing queue
     await db.execute('''
       CREATE INDEX idx_llm_status ON payment_slips(llmProcessingStatus)
+    ''');
+
+    // Create index for reference ID lookups
+    await db.execute('''
+      CREATE INDEX idx_referenceId ON payment_slips(referenceId)
     ''');
   }
 
@@ -76,6 +86,17 @@ class DatabaseService {
       await db.execute('''
         CREATE INDEX idx_llm_status ON payment_slips(llmProcessingStatus)
       ''');
+    }
+
+    if (oldVersion < 4) {
+      // Add multi-bank OCR extraction fields
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN senderName TEXT');
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN referenceId TEXT');
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN senderAccount TEXT');
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN receiverAccount TEXT');
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN transactionTime TEXT');
+
+      await db.execute('CREATE INDEX idx_referenceId ON payment_slips(referenceId)');
     }
   }
 

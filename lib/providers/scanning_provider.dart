@@ -8,6 +8,13 @@ import 'scanning_state.dart';
 
 part 'scanning_provider.g.dart';
 
+/// Helper to convert empty strings from iOS to null
+String? _nonEmpty(dynamic value) {
+  if (value == null) return null;
+  final str = value.toString().trim();
+  return str.isEmpty ? null : str;
+}
+
 /// Top-level function for isolate - must be outside class
 List<PaymentSlip> convertSlipsInIsolate(List<dynamic> slips) {
   return slips.map((slip) {
@@ -38,6 +45,12 @@ List<PaymentSlip> convertSlipsInIsolate(List<dynamic> slips) {
       date: slipDate,
       extractedText: slipData['text'] ?? '',
       createdAt: DateTime.now(),
+      recipientName: _nonEmpty(slipData['receiverName']),
+      senderName: _nonEmpty(slipData['senderName']),
+      referenceId: _nonEmpty(slipData['referenceId']),
+      senderAccount: _nonEmpty(slipData['senderAccount']),
+      receiverAccount: _nonEmpty(slipData['receiverAccount']),
+      transactionTime: _nonEmpty(slipData['time']),
     );
   }).toList();
 }

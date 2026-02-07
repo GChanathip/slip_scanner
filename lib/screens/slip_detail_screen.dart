@@ -84,9 +84,47 @@ class SlipDetailScreen extends StatelessWidget {
           // Date Card
           FCard(
             title: const Text('Date'),
-            subtitle: Text(DateFormat('MMMM dd, yyyy').format(slip.date), style: theme.typography.lg),
+            subtitle: Text(
+              slip.transactionTime != null
+                  ? '${DateFormat('MMMM dd, yyyy').format(slip.date)} - ${slip.transactionTime}'
+                  : DateFormat('MMMM dd, yyyy').format(slip.date),
+              style: theme.typography.lg,
+            ),
           ),
           const SizedBox(height: 16),
+
+          // Sender Info
+          if (slip.senderName != null) ...[
+            FCard(
+              title: const Text('From'),
+              subtitle: Text(slip.senderName!, style: theme.typography.lg),
+              child: slip.senderAccount != null
+                  ? Text('Account: xxx-xxx${slip.senderAccount}', style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground))
+                  : null,
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // Receiver Info
+          if (slip.recipientName != null) ...[
+            FCard(
+              title: const Text('To'),
+              subtitle: Text(slip.recipientName!, style: theme.typography.lg),
+              child: slip.receiverAccount != null
+                  ? Text('Account: xxx-xxx${slip.receiverAccount}', style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground))
+                  : null,
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // Reference ID
+          if (slip.referenceId != null) ...[
+            FCard(
+              title: const Text('Reference ID'),
+              subtitle: Text(slip.referenceId!, style: theme.typography.base),
+            ),
+            const SizedBox(height: 16),
+          ],
 
           // Image Preview
           if (File(slip.imagePath).existsSync()) ...[

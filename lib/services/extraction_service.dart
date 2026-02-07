@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:cactus/cactus.dart';
+import 'package:cactus/models/types.dart';
 import 'cactus_service.dart';
 
 /// Result of LLM extraction from slip text
@@ -8,11 +9,7 @@ class ExtractionResult {
   final String? notes;
   final String? category;
 
-  ExtractionResult({
-    this.recipientName,
-    this.notes,
-    this.category,
-  });
+  ExtractionResult({this.recipientName, this.notes, this.category});
 
   @override
   String toString() => 'ExtractionResult(recipient: $recipientName, notes: $notes, category: $category)';
@@ -43,10 +40,7 @@ Rules:
 
     final messages = [
       ChatMessage(content: _systemPrompt, role: 'system'),
-      ChatMessage(
-        content: 'Extract info from this Thai banking slip:\n\n$extractedText',
-        role: 'user',
-      ),
+      ChatMessage(content: 'Extract info from this Thai banking slip:\n\n$extractedText', role: 'user'),
     ];
 
     final result = await CactusService.instance.generateCompletion(messages);

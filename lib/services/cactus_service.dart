@@ -1,5 +1,8 @@
 import 'dart:async';
-import 'package:cactus/cactus.dart';
+import 'package:cactus/models/rag.dart';
+import 'package:cactus/models/types.dart';
+import 'package:cactus/services/lm.dart';
+import 'package:cactus/services/rag.dart';
 import 'package:flutter/foundation.dart';
 
 /// Singleton service managing CactusLM and CactusRAG lifecycle.
@@ -87,9 +90,7 @@ class CactusService {
   /// Stream completion (for chat UI)
   /// Note: We acquire lock at start but streaming happens async
   /// Caller must ensure no other LLM operations during stream consumption
-  Future<CactusStreamedCompletionResult> generateCompletionStream(
-    List<ChatMessage> messages,
-  ) async {
+  Future<CactusStreamedCompletionResult> generateCompletionStream(List<ChatMessage> messages) async {
     if (!_isModelLoaded) throw Exception('Model not loaded');
     // For streaming, we need to hold the lock during the entire stream
     // We'll acquire it here and release when the stream is done
@@ -113,10 +114,7 @@ class CactusService {
           },
         ),
       );
-      return CactusStreamedCompletionResult(
-        stream: wrappedStream,
-        result: streamResult.result,
-      );
+      return CactusStreamedCompletionResult(stream: wrappedStream, result: streamResult.result);
     } catch (e) {
       debugPrint('🔓 Releasing lock after stream setup error');
       _operationLock.release();
@@ -129,7 +127,9 @@ class CactusService {
   Future<List<double>> generateEmbedding(String text) async {
     if (!_isModelLoaded) throw Exception('Model not loaded');
     return await _operationLock.synchronized(() async {
-      debugPrint('🔒 Acquiring lock for generateEmbedding: ${text.substring(0, text.length > 30 ? 30 : text.length)}...');
+      debugPrint(
+        '🔒 Acquiring lock for generateEmbedding: ${text.substring(0, text.length > 30 ? 30 : text.length)}...',
+      );
       final result = await _lm!.generateEmbedding(text: text);
       debugPrint('🔓 Released lock for generateEmbedding');
       return result.embeddings;
@@ -137,17 +137,9 @@ class CactusService {
   }
 
   /// Store document in RAG
-  Future<void> storeInRAG({
-    required String id,
-    required String content,
-  }) async {
+  Future<void> storeInRAG({required String id, required String content}) async {
     if (_rag == null) throw Exception('RAG not initialized');
-    await _rag!.storeDocument(
-      fileName: 'slip_$id',
-      filePath: '/slips/$id',
-      content: content,
-      fileSize: content.length,
-    );
+    await _rag!.storeDocument(fileName: 'slip_$id', filePath: '/slips/$id', content: content, fileSize: content.length);
   }
 
   /// Search RAG for similar content
