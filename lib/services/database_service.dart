@@ -186,9 +186,7 @@ class DatabaseService {
         'payment_slips',
         orderBy: 'date DESC',
       );
-      return List.generate(maps.length, (i) {
-        return PaymentSlip.fromMap(maps[i]);
-      });
+      return maps.map(PaymentSlip.fromMap).toList();
     } catch (e) {
       print('❌ ERROR: Failed to get payment slips: $e');
       return []; // Return empty list on error
@@ -207,9 +205,7 @@ class DatabaseService {
       orderBy: 'date DESC',
     );
     
-    return List.generate(maps.length, (i) {
-      return PaymentSlip.fromMap(maps[i]);
-    });
+    return maps.map(PaymentSlip.fromMap).toList();
   }
 
   static Future<Map<String, double>> getMonthlyTotals() async {
@@ -256,7 +252,7 @@ class DatabaseService {
       orderBy: 'createdAt ASC',
       limit: limit,
     );
-    return List.generate(maps.length, (i) => PaymentSlip.fromMap(maps[i]));
+    return maps.map(PaymentSlip.fromMap).toList();
   }
 
   /// Count slips with a specific status
@@ -329,7 +325,7 @@ class DatabaseService {
       whereArgs: [start.toIso8601String(), end.toIso8601String()],
       orderBy: 'date DESC',
     );
-    return List.generate(maps.length, (i) => PaymentSlip.fromMap(maps[i]));
+    return maps.map(PaymentSlip.fromMap).toList();
   }
 
   /// Reset failed slips back to pending for retry
@@ -356,6 +352,6 @@ class DatabaseService {
       orderBy: 'createdAt ASC',
       limit: limit,
     );
-    return List.generate(maps.length, (i) => PaymentSlip.fromMap(maps[i]));
+    return maps.map(PaymentSlip.fromMap).toList();
   }
 }

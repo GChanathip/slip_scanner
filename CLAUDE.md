@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Important
 
-This project focuses on **iOS only** - ignore Android implementation for now.
+This project focuses on **iOS only** — ignore Android implementation.
 
 ## Project Overview
 
-Flutter iOS app that scans payment slips from device photos using Apple Vision Framework OCR. Specializes in Thai banking slips with Thai language text recognition, Buddhist calendar conversion, and comma-separated number formatting.
+Flutter iOS app that scans payment slips from device photos using Apple Vision Framework OCR. Specializes in Thai banking slips (SCB, KBank Make/K Plus, Dime) with Thai language text recognition, Buddhist calendar conversion, and on-device LLM extraction via CactusLM.
 
 ## Development Commands
 
@@ -19,105 +19,100 @@ flutter build ios            # Build for iOS release
 flutter test                 # Run tests
 flutter analyze              # Analyze code (includes linting)
 cd ios && pod install        # Install iOS dependencies
-dart run build_runner build  # Generate Riverpod/Freezed/AutoRoute code
+dart run build_runner build --delete-conflicting-outputs  # Generate code
 dart run build_runner watch  # Watch mode for code generation
 ```
 
 ## Code Generation
 
-This project uses code generation for state management and routing. After modifying files with `@riverpod`, `@freezed`, or `@RoutePage` annotations, run:
-```bash
-dart run build_runner build --delete-conflicting-outputs
-```
+After modifying files with `@riverpod`, `@freezed`, or `@RoutePage` annotations, run `dart run build_runner build --delete-conflicting-outputs`.
 
 Generated files (do not edit manually):
-- `*.g.dart` - Riverpod providers
-- `*.freezed.dart` - Freezed immutable classes
-- `lib/router/app_router.gr.dart` - AutoRoute routes
+- `*.g.dart` — Riverpod providers
+- `*.freezed.dart` — Freezed immutable classes
+- `lib/router/app_router.gr.dart` — AutoRoute routes
 
 ## Architecture Overview
 
+### Data Flow
+
+```
+iOS Photos → scanAllPhotos() → DispatchQueue.global → OperationQueue (max 6)
+  → VisionKit OCR (accurate, th-TH + en-US) → RegexPatterns extraction
+  → buildSlipResult() → PlatformService (streams) → ScanningProvider
+  → DatabaseService.insertPaymentSlipsBatch()
+  → ExtractionNotifier.notifyNewSlips() [event-driven]
+  → ExtractionQueue._processingLoop()
+  → ExtractionService.extractFromText() [LLM, async-locked]
+  → DatabaseService.updateExtractedData()
+  → RAGQueueService.enqueue() [fire-and-forget, lower priority]
+```
+
 ### UI (ForUI)
 
-Uses `forui` as the design system - a Flutter UI library inspired by shadcn/ui. Components include `FButton`, `FCard`, `FAlert`, `FDialog`, `FToast`, etc. Theming configured in `main.dart` with Zinc color scheme via `FThemes.zinc`. See [docs/FORUI_GUIDE.md](docs/FORUI_GUIDE.md) for comprehensive usage guide.
+Design system: `forui` package (shadcn/ui-inspired). Components: `FButton`, `FCard`, `FAlert`, `FDialog`, `FToast`, `FScaffold`, `FHeader`. Theming via `FThemes.zinc` in `main.dart`. See [docs/FORUI_GUIDE.md](docs/FORUI_GUIDE.md) for usage guide.
 
 ### State Management (Riverpod + Freezed)
 
-- **Riverpod** for reactive state management with code generation (`@riverpod`)
-- **Freezed** for immutable state classes with `copyWith()` support
-- Key provider: `ScanningProvider` (keepAlive) manages entire scan lifecycle
-- State flows: iOS streams → PlatformService → ScanningProvider → UI
+- `@riverpod` code generation for providers, `@freezed` for immutable state classes
+- Key keepAlive providers: `ScanningProvider` (scan lifecycle), `ExtractionQueue` (LLM processing), `CactusProvider` (model management)
 
 ### Routing (AutoRoute)
 
 Type-safe routing with `@RoutePage` annotations. Routes defined in `lib/router/app_router.dart`.
 
-### Flutter 3.35+ Merged Thread Consideration
+### Platform Channels
 
-Flutter 3.35+ merges the Dart UI thread with the native platform thread. **Critical**: All blocking native work must run on explicit background threads using `DispatchQueue.global()`, NOT `Task{}` which inherits MainActor context.
+- `com.example.slip_scanner/vision` — OCR operations (scanAllPhotos, cancelScanning, scanPaymentSlip, deleteSlipImage)
+- `com.example.slip_scanner/progress` — Real-time callbacks (onProgress, onPartialResults) via `DispatchQueue.main.async`
 
-### Platform Channel Integration
+### On-Device AI Pipeline (CactusLM + RAG)
 
-Dual platform channels for Flutter-iOS communication:
-- `com.example.slip_scanner/vision` - OCR operations (scanAllPhotos, cancelScanning, scanPaymentSlip)
-- `com.example.slip_scanner/progress` - Real-time progress updates via `onProgress` and `onPartialResults` callbacks
+**CactusService** (singleton): Manages CactusLM and CactusRAG lifecycle. Uses custom `_AsyncLock` (async mutex) to serialize all LLM operations — CactusLM is NOT thread-safe (causes EXC_BAD_ACCESS without locking). Streaming completions acquire lock at start, release when stream finishes.
 
-### Data Flow
+**ExtractionService**: Extracts structured data (recipientName, notes, category) from OCR text via LLM. Fixed categories: food, transport, utilities, shopping, transfer, entertainment, health, education, other.
 
-```
-Flutter UI → ScanningProvider → PlatformService → iOS AppDelegate (background thread) → Vision Framework → Progress Stream → Database
-```
+**ExtractionQueue** (provider): Event-driven background processing via `ExtractionNotifier` stream (no polling). Priority: extraction > RAG indexing. Pauses when user enters chat screen to avoid lock contention, resumes on exit.
+
+**RAGQueueService** (singleton): Fire-and-forget indexing — doesn't block extraction if RAG fails. Indexes rich documents (amount, date, recipient, notes, category, original text).
+
+**ChatProvider**: Builds system prompt with expense stats + RAG context (top 5 relevant records), streams LLM completion.
 
 ### iOS Native Implementation (AppDelegate.swift)
 
-- **OCR Engine**: Apple Vision Framework with `.accurate` recognition, `th-TH` and `en-US` languages
-- **Concurrency**: `OperationQueue` with max 6 concurrent operations (no chunking - streams per-image)
-- **Thread Safety**: `NSLock` for counters, `DispatchQueue.main.async` for Flutter callbacks
-- **Background Processing**: All OCR runs on `DispatchQueue.global(qos: .userInitiated)`
-- **Regex Patterns**: Pre-compiled static patterns for Thai banking formats (SCB, KBank)
-- **Buddhist Calendar**: Automatic BE to Gregorian conversion (2567 BE → 2024 AD)
+- **OCR**: Vision Framework, `.accurate` level, `th-TH` + `en-US` languages
+- **Concurrency**: `OperationQueue` with max `min(ProcessorCount, 6)` concurrent ops. Thread-safe counters via `NSLock`
+- **Shared helpers**: `recognizeText(from:)` → `buildSlipResult(text:amount:date:identifier:)` — both OCR paths (`processImageForPaymentSlip` batch and `scanPaymentSlip` single) use these
+- **Name extraction**: `extractName(from:labelPatterns:anchorMatchIndex:)` — unified 3-tier strategy (label patterns → K Plus anchor → Make anchor), parameterized by match index (0=sender, 1=receiver)
+- **RegexPatterns struct**: 40+ pre-compiled `NSRegularExpression` patterns for SCB, KBank (Make/K Plus), Dime formats
+- **Buddhist Calendar**: Auto BE→Gregorian conversion (2567→2024, or short form 67→2024)
 
-### Database Schema
+**Critical (Flutter 3.35+)**: All blocking native work must use `DispatchQueue.global()`, NOT `Task{}` which inherits MainActor context on merged threads.
 
-SQLite database (`payment_slips.db`) with duplicate prevention via `assetId` indexing:
-```sql
-payment_slips: id, imagePath, assetId, amount, date, extractedText, createdAt
+### Database (SQLite, v4)
+
+```
+payment_slips:
+  id, imagePath, assetId, amount, date, extractedText, createdAt,
+  senderName, referenceId, senderAccount, receiverAccount, transactionTime,  -- OCR (v4)
+  recipientName, notes, category,                                            -- LLM (v3)
+  llmProcessingStatus ('pending'|'processing'|'completed'|'failed'),         -- LLM (v3)
+  ragIndexed (0|1), updatedAt                                                -- LLM (v3)
+
+Indexes: idx_assetId (dedup), idx_llm_status (queue), idx_referenceId (lookup)
 ```
 
-## Thai Language OCR Specifics
+Batch inserts use transactions with assetId deduplication. New inserts trigger `ExtractionNotifier.notifyNewSlips()`.
 
-### Amount Extraction Patterns (Priority Order)
-1. `จำนวนเงิน 1,234.56` (SCB format)
-2. `จำนวน: 1,234.56 บาท` (KBank format)
-3. `1,234.56 บาท` (General format)
-4. Comma separator support for amounts over 999
+## Key Conventions
 
-### Date Parsing
-- Buddhist calendar conversion (2567 BE → 2024 AD, or short form: 67 → 2024)
-- Thai month abbreviations (`มิ.ย.`, `ม.ค.`, etc.)
-- Multiple date formats (DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD)
-
-## Stream Architecture
-
-Real-time updates during scanning with no throttling:
-
-```dart
-PlatformService.getProgressStream()      // {total, processed, slipsFound, isComplete}
-PlatformService.getPartialResultsStream() // Batched every 10 slips found
-```
-
-iOS sends updates after every image processed via `DispatchQueue.main.async` (non-blocking).
-
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `ios/Runner/AppDelegate.swift` | All iOS OCR logic, Vision Framework, concurrency |
-| `lib/services/platform_service.dart` | Flutter-iOS bridge, stream management |
-| `lib/services/database_service.dart` | SQLite operations, batch inserts with dedup |
-| `lib/providers/scanning_provider.dart` | Riverpod state management for scanning |
-| `lib/providers/scanning_state.dart` | Freezed immutable state class |
-| `lib/router/app_router.dart` | AutoRoute navigation configuration |
+- iOS returns empty strings `""` for missing optional fields (not nil) — Flutter side uses `_nonEmpty()` helper to convert to null
+- `convertSlipsInIsolate` must be a top-level function (required for `compute()` isolate compatibility)
+- OCR receiver name pre-fills `recipientName`; LLM extraction overwrites if non-null
+- Multi-bank regex patterns: arrays tried in priority order, first match wins
+- KBank slips use positional extraction (no labels) — match index 0 = sender, index 1 = receiver
+- Currency symbol is `฿` (Thai Baht), not `$`
+- Shared helpers in `lib/utils/` (dialogs, formatters) and `lib/widgets/` (hero_card, slip_list_tile)
 
 ## Requirements
 

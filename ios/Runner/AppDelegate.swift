@@ -373,7 +373,10 @@ private struct RegexPatterns {
         return resultImage
     }
 
-    private func processImageForPaymentSlip(cgImage: CGImage, assetId: String) -> [String: Any]? {
+    // MARK: - Shared OCR Helpers
+
+    /// Perform OCR on a CGImage and return extracted text, amount, and date
+    private func recognizeText(from cgImage: CGImage) -> (text: String, amount: Double?, date: String?) {
         let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
         var extractedText = ""
         var amount: Double?
@@ -403,42 +406,46 @@ private struct RegexPatterns {
 
         do {
             try requestHandler.perform([request])
-
-            if let foundAmount = amount, foundAmount > 0 {
-                let dateFormatter = DateFormatter()
-                dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
-                dateFormatter.timeZone = TimeZone(abbreviation: "UTC")
-
-                // Extract multi-bank fields from full text
-                let referenceId = self.extractReferenceId(extractedText)
-                let senderName = self.extractSenderName(extractedText)
-                let receiverName = self.extractReceiverName(extractedText)
-                let time = self.extractTimeFromText(extractedText)
-                let accounts = self.extractAccountNumbers(extractedText)
-                let senderAccount = accounts.count > 0 ? accounts[0] : nil
-                let receiverAccount = accounts.count > 1 ? accounts[1] : nil
-
-                return [
-                    "text": String(extractedText.prefix(10000)),
-                    "amount": foundAmount,
-                    "date": String((date ?? "").prefix(50)),
-                    "assetId": String(assetId.prefix(100)),
-                    "createdAt": dateFormatter.string(from: Date()),
-                    "referenceId": referenceId ?? "",
-                    "senderName": senderName ?? "",
-                    "receiverName": receiverName ?? "",
-                    "senderAccount": senderAccount ?? "",
-                    "receiverAccount": receiverAccount ?? "",
-                    "time": time ?? "",
-                ]
-            }
         } catch {
             #if DEBUG
             print("Vision error: \(error)")
             #endif
         }
 
-        return nil
+        return (extractedText, amount, date)
+    }
+
+    /// Build a result dictionary from extracted OCR data
+    private func buildSlipResult(text: String, amount: Double, date: String?, identifier: String) -> [String: Any] {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+        dateFormatter.timeZone = TimeZone(abbreviation: "UTC")
+
+        let referenceId = extractReferenceId(text)
+        let senderName = extractSenderName(text)
+        let receiverName = extractReceiverName(text)
+        let time = extractTimeFromText(text)
+        let accounts = extractAccountNumbers(text)
+
+        return [
+            "text": String(text.prefix(10000)),
+            "amount": amount,
+            "date": String((date ?? "").prefix(50)),
+            "assetId": String(identifier.prefix(100)),
+            "createdAt": dateFormatter.string(from: Date()),
+            "referenceId": referenceId ?? "",
+            "senderName": senderName ?? "",
+            "receiverName": receiverName ?? "",
+            "senderAccount": accounts.count > 0 ? accounts[0] : "",
+            "receiverAccount": accounts.count > 1 ? accounts[1] : "",
+            "time": time ?? "",
+        ]
+    }
+
+    private func processImageForPaymentSlip(cgImage: CGImage, assetId: String) -> [String: Any]? {
+        let (text, amount, date) = recognizeText(from: cgImage)
+        guard let foundAmount = amount, foundAmount > 0 else { return nil }
+        return buildSlipResult(text: text, amount: foundAmount, date: date, identifier: assetId)
     }
 
     // MARK: - Callbacks to Flutter (non-blocking)
@@ -478,63 +485,17 @@ private struct RegexPatterns {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-            var extractedText = ""
-            var amount: Double?
-            var date: String?
+            let (text, amount, date) = self.recognizeText(from: cgImage)
+            var slipResult = self.buildSlipResult(
+                text: text,
+                amount: amount ?? 0.0,
+                date: date,
+                identifier: imagePath
+            )
+            slipResult["imagePath"] = imagePath
 
-            let request = VNRecognizeTextRequest { [weak self] (request, error) in
-                guard let self = self,
-                      error == nil,
-                      let observations = request.results as? [VNRecognizedTextObservation] else { return }
-
-                for observation in observations {
-                    guard let topCandidate = observation.topCandidates(1).first else { continue }
-                    let text = topCandidate.string
-                    extractedText += text + "\n"
-
-                    if amount == nil { amount = self.extractAmountFromText(text) }
-                    if date == nil { date = self.extractDateFromText(text) }
-                }
-
-                if amount == nil { amount = self.extractAmountFromText(extractedText) }
-                if date == nil { date = self.extractDateFromText(extractedText) }
-            }
-
-            request.recognitionLevel = .accurate
-            request.recognitionLanguages = ["th-TH", "en-US"]
-            request.usesLanguageCorrection = true
-
-            do {
-                try requestHandler.perform([request])
-
-                // Extract multi-bank fields from full text
-                let referenceId = self.extractReferenceId(extractedText)
-                let senderName = self.extractSenderName(extractedText)
-                let receiverName = self.extractReceiverName(extractedText)
-                let time = self.extractTimeFromText(extractedText)
-                let accounts = self.extractAccountNumbers(extractedText)
-                let senderAccount = accounts.count > 0 ? accounts[0] : nil
-                let receiverAccount = accounts.count > 1 ? accounts[1] : nil
-
-                DispatchQueue.main.async {
-                    result([
-                        "text": extractedText,
-                        "amount": amount ?? 0.0,
-                        "date": date ?? "",
-                        "imagePath": imagePath,
-                        "referenceId": referenceId ?? "",
-                        "senderName": senderName ?? "",
-                        "receiverName": receiverName ?? "",
-                        "senderAccount": senderAccount ?? "",
-                        "receiverAccount": receiverAccount ?? "",
-                        "time": time ?? "",
-                    ])
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    result(FlutterError(code: "VISION_ERROR", message: error.localizedDescription, details: nil))
-                }
+            DispatchQueue.main.async {
+                result(slipResult)
             }
         }
     }
@@ -627,12 +588,16 @@ private struct RegexPatterns {
         return nil
     }
 
-    private func extractSenderName(_ text: String) -> String? {
+    private func extractName(
+        from text: String,
+        labelPatterns: [NSRegularExpression],
+        anchorMatchIndex: Int
+    ) -> String? {
         let nsText = text as NSString
         let range = NSRange(location: 0, length: nsText.length)
 
-        // Try label-based patterns first (SCB: จาก, Dime: From)
-        for regex in RegexPatterns.senderNamePatterns {
+        // Try label-based patterns first (SCB/Dime)
+        for regex in labelPatterns {
             if let match = regex.firstMatch(in: text, options: [], range: range),
                match.numberOfRanges > 1 {
                 let name = nsText.substring(with: match.range(at: 1))
@@ -641,18 +606,18 @@ private struct RegexPatterns {
             }
         }
 
-        // Try K Plus anchor (name 2 lines above mask) — match #1 is sender
+        // Try K Plus anchor (name 2 lines above mask)
         let kplusMatches = RegexPatterns.kbankPlusNamePattern.matches(in: text, options: [], range: range)
-        if kplusMatches.count > 0, kplusMatches[0].numberOfRanges > 1 {
-            let name = nsText.substring(with: kplusMatches[0].range(at: 1))
+        if kplusMatches.count > anchorMatchIndex, kplusMatches[anchorMatchIndex].numberOfRanges > 1 {
+            let name = nsText.substring(with: kplusMatches[anchorMatchIndex].range(at: 1))
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if !name.isEmpty { return name }
         }
 
-        // Try Make anchor (name directly above mask) — match #1 is sender
+        // Try Make anchor (name directly above mask)
         let makeMatches = RegexPatterns.kbankMakeNamePattern.matches(in: text, options: [], range: range)
-        if makeMatches.count > 0, makeMatches[0].numberOfRanges > 1 {
-            let name = nsText.substring(with: makeMatches[0].range(at: 1))
+        if makeMatches.count > anchorMatchIndex, makeMatches[anchorMatchIndex].numberOfRanges > 1 {
+            let name = nsText.substring(with: makeMatches[anchorMatchIndex].range(at: 1))
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if !name.isEmpty { return name }
         }
@@ -660,37 +625,12 @@ private struct RegexPatterns {
         return nil
     }
 
+    private func extractSenderName(_ text: String) -> String? {
+        extractName(from: text, labelPatterns: RegexPatterns.senderNamePatterns, anchorMatchIndex: 0)
+    }
+
     private func extractReceiverName(_ text: String) -> String? {
-        let nsText = text as NSString
-        let range = NSRange(location: 0, length: nsText.length)
-
-        // Try label-based patterns first (SCB: ไปยัง, Dime: To)
-        for regex in RegexPatterns.receiverNamePatterns {
-            if let match = regex.firstMatch(in: text, options: [], range: range),
-               match.numberOfRanges > 1 {
-                let name = nsText.substring(with: match.range(at: 1))
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                if !name.isEmpty { return name }
-            }
-        }
-
-        // Try K Plus anchor — match #2 is receiver
-        let kplusMatches = RegexPatterns.kbankPlusNamePattern.matches(in: text, options: [], range: range)
-        if kplusMatches.count > 1, kplusMatches[1].numberOfRanges > 1 {
-            let name = nsText.substring(with: kplusMatches[1].range(at: 1))
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if !name.isEmpty { return name }
-        }
-
-        // Try Make anchor — match #2 is receiver
-        let makeMatches = RegexPatterns.kbankMakeNamePattern.matches(in: text, options: [], range: range)
-        if makeMatches.count > 1, makeMatches[1].numberOfRanges > 1 {
-            let name = nsText.substring(with: makeMatches[1].range(at: 1))
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if !name.isEmpty { return name }
-        }
-
-        return nil
+        extractName(from: text, labelPatterns: RegexPatterns.receiverNamePatterns, anchorMatchIndex: 1)
     }
 
     private func extractAccountNumbers(_ text: String) -> [String] {

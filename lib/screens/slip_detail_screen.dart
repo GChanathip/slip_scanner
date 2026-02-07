@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../models/payment_slip.dart';
 import '../services/database_service.dart';
 import '../services/platform_service.dart';
+import '../utils/dialogs.dart';
 
 @RoutePage()
 class SlipDetailScreen extends StatelessWidget {
@@ -14,46 +15,23 @@ class SlipDetailScreen extends StatelessWidget {
   const SlipDetailScreen({super.key, required this.slip});
 
   Future<void> _deleteSlip(BuildContext context) async {
-    final confirm = await showFDialog<bool>(
-      context: context,
-      builder: (dialogContext, style, animation) => FDialog(
-        style: (_) => style,
-        animation: animation,
-        direction: Axis.vertical,
-        title: const Text('Delete Slip'),
-        body: const Text('Are you sure you want to delete this payment slip?'),
-        actions: [
-          FButton(
-            style: FButtonStyle.outline(),
-            onPress: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FButton(
-            style: FButtonStyle.destructive(),
-            onPress: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
+    if (!await showDeleteConfirmation(context)) return;
 
-    if (confirm == true) {
-      try {
-        await PlatformService.deleteSlipImage(slip.imagePath);
-        await DatabaseService.deletePaymentSlip(slip.id!);
+    try {
+      await PlatformService.deleteSlipImage(slip.imagePath);
+      await DatabaseService.deletePaymentSlip(slip.id!);
 
-        if (context.mounted) {
-          context.router.maybePop();
-          showFToast(
-            context: context,
-            title: const Text('Success'),
-            description: const Text('Slip deleted successfully'),
-          );
-        }
-      } catch (e) {
-        if (context.mounted) {
-          showFToast(context: context, title: const Text('Error'), description: Text('Error deleting slip: $e'));
-        }
+      if (context.mounted) {
+        context.router.maybePop();
+        showFToast(
+          context: context,
+          title: const Text('Success'),
+          description: const Text('Slip deleted successfully'),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showFToast(context: context, title: const Text('Error'), description: Text('Error deleting slip: $e'));
       }
     }
   }
@@ -75,7 +53,7 @@ class SlipDetailScreen extends StatelessWidget {
           FCard(
             title: const Text('Amount'),
             subtitle: Text(
-              '\$${slip.amount.toStringAsFixed(2)}',
+              '฿${slip.amount.toStringAsFixed(2)}',
               style: theme.typography.xl4.copyWith(fontWeight: FontWeight.bold, color: theme.colors.primary),
             ),
           ),

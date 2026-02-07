@@ -9,6 +9,8 @@ import '../router/app_router.dart';
 import '../services/database_service.dart';
 import '../providers/scanning_provider.dart';
 import '../providers/extraction_provider.dart';
+import '../widgets/hero_card.dart';
+import '../widgets/slip_list_tile.dart';
 
 @RoutePage()
 class HomeScreen extends ConsumerStatefulWidget {
@@ -123,110 +125,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16.0),
                 children: [
-                  // Scan All Photos Card - Use GestureDetector + Container
-                  GestureDetector(
+                  HeroCard(
                     onTap: _startScanAllPhotos,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [theme.colors.primary, theme.colors.primary.withValues(alpha: 0.8)],
-                        ),
-                        borderRadius: theme.style.borderRadius,
-                      ),
-                      padding: const EdgeInsets.all(20.0),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(FIcons.images, color: theme.colors.primaryForeground, size: 32),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _hasScannedBefore ? 'Scan New Photos' : 'Scan All Photos',
-                                  style: TextStyle(
-                                    color: theme.colors.primaryForeground,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  _hasScannedBefore
-                                      ? 'Find new payment slips in your photos'
-                                      : 'Automatically find payment slips in your photo library',
-                                  style: TextStyle(
-                                    color: theme.colors.primaryForeground.withValues(alpha: 0.9),
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Icon(FIcons.arrowRight, color: theme.colors.primaryForeground),
-                        ],
-                      ),
-                    ),
+                    color: theme.colors.primary,
+                    foregroundColor: theme.colors.primaryForeground,
+                    icon: FIcons.images,
+                    title: _hasScannedBefore ? 'Scan New Photos' : 'Scan All Photos',
+                    subtitle: _hasScannedBefore
+                        ? 'Find new payment slips in your photos'
+                        : 'Automatically find payment slips in your photo library',
                   ),
 
                   const SizedBox(height: 12),
 
-                  // Analyze Expenses Card
-                  GestureDetector(
+                  HeroCard(
                     onTap: () => context.router.push(const AnalysisRoute()),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [theme.colors.secondary, theme.colors.secondary.withValues(alpha: 0.8)],
-                        ),
-                        borderRadius: theme.style.borderRadius,
-                      ),
-                      padding: const EdgeInsets.all(20.0),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: theme.colors.secondaryForeground.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(FIcons.sparkles, color: theme.colors.secondaryForeground, size: 32),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'AI Expense Analysis',
-                                  style: TextStyle(
-                                    color: theme.colors.secondaryForeground,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Get insights and chat with AI about your spending',
-                                  style: TextStyle(
-                                    color: theme.colors.secondaryForeground.withValues(alpha: 0.9),
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Icon(FIcons.arrowRight, color: theme.colors.secondaryForeground),
-                        ],
-                      ),
-                    ),
+                    color: theme.colors.secondary,
+                    foregroundColor: theme.colors.secondaryForeground,
+                    icon: FIcons.sparkles,
+                    title: 'AI Expense Analysis',
+                    subtitle: 'Get insights and chat with AI about your spending',
                   ),
 
                   // Background processing indicator
@@ -273,7 +191,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     FCard(
                       title: const Text("This Month's Spending"),
                       subtitle: Text(
-                        '\$${currentMonthTotal.toStringAsFixed(2)}',
+                        '฿${currentMonthTotal.toStringAsFixed(2)}',
                         style: theme.typography.xl4.copyWith(color: theme.colors.primary, fontWeight: FontWeight.bold),
                       ),
                       child: Padding(
@@ -316,7 +234,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               children: [
                                 Text(DateFormat('MMMM yyyy').format(month), style: theme.typography.base),
                                 Text(
-                                  '\$${entry.value.toStringAsFixed(2)}',
+                                  '฿${entry.value.toStringAsFixed(2)}',
                                   style: theme.typography.base.copyWith(fontWeight: FontWeight.bold),
                                 ),
                               ],
@@ -346,45 +264,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   if (_recentSlips.isNotEmpty) ...[
                     Text('Recent Slips', style: theme.typography.xl2),
                     const SizedBox(height: 8),
-                    ..._recentSlips.map((slip) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8.0),
-                        child: GestureDetector(
-                          onTap: () {
-                            context.router.push(SlipDetailRoute(slip: slip)).then((_) => _loadData());
-                          },
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: theme.colors.background,
-                              border: Border.all(color: theme.colors.border),
-                              borderRadius: theme.style.borderRadius,
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '\$${slip.amount.toStringAsFixed(2)}',
-                                      style: theme.typography.lg.copyWith(fontWeight: FontWeight.bold),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      DateFormat('MMM dd, yyyy').format(slip.date),
-                                      style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground),
-                                    ),
-                                  ],
-                                ),
-                                Icon(FIcons.chevronRight, size: 20, color: theme.colors.mutedForeground),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
+                    ..._recentSlips.map((slip) => SlipListTile(
+                          slip: slip,
+                          onTap: () => context.router.push(SlipDetailRoute(slip: slip)).then((_) => _loadData()),
+                        )),
                   ],
                 ],
               ),

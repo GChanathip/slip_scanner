@@ -5,6 +5,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../services/database_service.dart';
 import '../services/cactus_service.dart';
 import '../models/payment_slip.dart';
+import '../utils/formatters.dart';
 import 'analysis_state.dart';
 
 part 'analysis_provider.g.dart';
@@ -123,7 +124,7 @@ class Analysis extends _$Analysis {
       final percentage = (topEntry.value / total * 100).toStringAsFixed(1);
       insights.add(InsightData(
         title: 'Top Category',
-        description: '${_formatCategory(topEntry.key)} is your highest spending at $percentage% of total',
+        description: '${formatCategory(topEntry.key)} is your highest spending at $percentage% of total',
         type: 'trend',
         value: topEntry.value,
         icon: 'chart',
@@ -220,11 +221,6 @@ Focus on actionable budget advice. Keep it brief.''';
       debugPrint('Error parsing AI insights: $e');
       return [];
     }
-  }
-
-  /// Format category name for display
-  String _formatCategory(String category) {
-    return category[0].toUpperCase() + category.substring(1);
   }
 
   /// Refresh analysis with current date range

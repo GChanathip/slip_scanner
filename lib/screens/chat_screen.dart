@@ -6,6 +6,7 @@ import '../providers/chat_provider.dart';
 import '../providers/chat_state.dart';
 import '../providers/cactus_provider.dart';
 import '../providers/extraction_provider.dart';
+import '../utils/formatters.dart';
 
 @RoutePage()
 class ChatScreen extends ConsumerStatefulWidget {
@@ -126,7 +127,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   Icon(FIcons.calendar, size: 16, color: theme.colors.mutedForeground),
                   const SizedBox(width: 8),
                   Text(
-                    _formatDateRange(chatState.startDate, chatState.endDate),
+                    formatDateRange(chatState.startDate, chatState.endDate),
                     style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground),
                   ),
                 ],
@@ -314,10 +315,4 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
-  String _formatDateRange(DateTime? start, DateTime? end) {
-    if (start == null && end == null) return 'All time';
-    final startStr = start != null ? '${start.day}/${start.month}/${start.year}' : 'Beginning';
-    final endStr = end != null ? '${end.day}/${end.month}/${end.year}' : 'Now';
-    return '$startStr - $endStr';
-  }
 }

@@ -7,6 +7,32 @@ import '../providers/analysis_state.dart';
 import '../providers/cactus_provider.dart';
 import '../providers/extraction_provider.dart';
 import '../router/app_router.dart';
+import '../utils/formatters.dart';
+
+const _categoryIcons = <String, IconData>{
+  'food': FIcons.utensils,
+  'transport': FIcons.car,
+  'utilities': FIcons.zap,
+  'shopping': FIcons.shoppingBag,
+  'transfer': FIcons.arrowRightLeft,
+  'entertainment': FIcons.gamepad2,
+  'health': FIcons.heart,
+  'education': FIcons.graduationCap,
+};
+
+const _insightIcons = <String, IconData>{
+  'trending_up': FIcons.trendingUp,
+  'trending_down': FIcons.trendingDown,
+  'alert': FIcons.triangleAlert,
+  'chart': FIcons.chartBar,
+  'lightbulb': FIcons.lightbulb,
+  'info': FIcons.info,
+};
+
+const _insightColors = <String, Color>{
+  'anomaly': Colors.orange,
+  'suggestion': Colors.blue,
+};
 
 @RoutePage()
 class AnalysisScreen extends ConsumerStatefulWidget {
@@ -102,7 +128,7 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
                                   children: [
                                     Text('Date Range', style: theme.typography.sm),
                                     Text(
-                                      _formatDateRange(),
+                                      _formatDateRangeLocal(),
                                       style: theme.typography.base.copyWith(fontWeight: FontWeight.w500),
                                     ),
                                   ],
@@ -167,7 +193,7 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
                             child: _buildStatCard(
                               theme,
                               'Top Category',
-                              _formatCategory(analysisState.topCategory ?? 'N/A'),
+                              formatCategory(analysisState.topCategory ?? 'N/A'),
                               FIcons.tag,
                             ),
                           ),
@@ -180,9 +206,8 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
                       if (analysisState.categoryBreakdown.isNotEmpty) ...[
                         Text('Spending by Category', style: theme.typography.xl),
                         const SizedBox(height: 12),
-                        ...analysisState.categoryBreakdown.entries
-                            .toList()
-                            .sorted((a, b) => b.value.compareTo(a.value))
+                        ...(analysisState.categoryBreakdown.entries.toList()
+                              ..sort((a, b) => b.value.compareTo(a.value)))
                             .map(
                               (entry) => _buildCategoryRow(theme, entry.key, entry.value, analysisState.totalSpending),
                             ),
@@ -276,7 +301,7 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
                 children: [
                   _getCategoryIcon(category, theme),
                   const SizedBox(width: 8),
-                  Text(_formatCategory(category), style: theme.typography.base),
+                  Text(formatCategory(category), style: theme.typography.base),
                 ],
               ),
               Text(
@@ -293,35 +318,8 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
   }
 
   Widget _buildInsightCard(FThemeData theme, InsightData insight) {
-    Color getColor() {
-      switch (insight.type) {
-        case 'anomaly':
-          return Colors.orange;
-        case 'suggestion':
-          return Colors.blue;
-        default:
-          return theme.colors.primary;
-      }
-    }
-
-    IconData getIcon() {
-      switch (insight.icon) {
-        case 'trending_up':
-          return FIcons.trendingUp;
-        case 'trending_down':
-          return FIcons.trendingDown;
-        case 'alert':
-          return FIcons.triangleAlert;
-        case 'chart':
-          return FIcons.chartBar;
-        case 'lightbulb':
-          return FIcons.lightbulb;
-        case 'info':
-          return FIcons.info;
-        default:
-          return FIcons.sparkles;
-      }
-    }
+    final color = _insightColors[insight.type] ?? theme.colors.primary;
+    final icon = _insightIcons[insight.icon] ?? FIcons.sparkles;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -334,10 +332,10 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: getColor().withValues(alpha: 0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(getIcon(), color: getColor(), size: 20),
+                child: Icon(icon, color: color, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -358,55 +356,8 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
   }
 
   Widget _getCategoryIcon(String category, FThemeData theme) {
-    IconData icon;
-    switch (category.toLowerCase()) {
-      case 'food':
-        icon = FIcons.utensils;
-        break;
-      case 'transport':
-        icon = FIcons.car;
-        break;
-      case 'utilities':
-        icon = FIcons.zap;
-        break;
-      case 'shopping':
-        icon = FIcons.shoppingBag;
-        break;
-      case 'transfer':
-        icon = FIcons.arrowRightLeft;
-        break;
-      case 'entertainment':
-        icon = FIcons.gamepad2;
-        break;
-      case 'health':
-        icon = FIcons.heart;
-        break;
-      case 'education':
-        icon = FIcons.graduationCap;
-        break;
-      default:
-        icon = FIcons.circle;
-    }
-    return Icon(icon, size: 18, color: theme.colors.primary);
+    return Icon(_categoryIcons[category.toLowerCase()] ?? FIcons.circle, size: 18, color: theme.colors.primary);
   }
 
-  String _formatCategory(String category) {
-    if (category.isEmpty) return 'Other';
-    return category[0].toUpperCase() + category.substring(1);
-  }
-
-  String _formatDateRange() {
-    if (_startDate == null && _endDate == null) return 'All time';
-    final startStr = _startDate != null ? '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}' : 'Beginning';
-    final endStr = _endDate != null ? '${_endDate!.day}/${_endDate!.month}/${_endDate!.year}' : 'Now';
-    return '$startStr - $endStr';
-  }
-}
-
-extension ListExtension<T> on List<T> {
-  List<T> sorted(int Function(T a, T b) compare) {
-    final list = [...this];
-    list.sort(compare);
-    return list;
-  }
+  String _formatDateRangeLocal() => formatDateRange(_startDate, _endDate);
 }

@@ -6,6 +6,8 @@ import '../models/payment_slip.dart';
 import '../router/app_router.dart';
 import '../services/database_service.dart';
 import '../services/platform_service.dart';
+import '../utils/dialogs.dart';
+import '../widgets/slip_list_tile.dart';
 
 @RoutePage()
 class MonthlyViewScreen extends StatefulWidget {
@@ -40,46 +42,23 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
   }
 
   Future<void> _deleteSlip(PaymentSlip slip) async {
-    final confirm = await showFDialog<bool>(
-      context: context,
-      builder: (dialogContext, style, animation) => FDialog(
-        style: (_) => style,
-        animation: animation,
-        direction: Axis.vertical,
-        title: const Text('Delete Slip'),
-        body: const Text('Are you sure you want to delete this payment slip?'),
-        actions: [
-          FButton(
-            style: FButtonStyle.outline(),
-            onPress: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FButton(
-            style: FButtonStyle.destructive(),
-            onPress: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
+    if (!await showDeleteConfirmation(context)) return;
 
-    if (confirm == true) {
-      try {
-        await PlatformService.deleteSlipImage(slip.imagePath);
-        await DatabaseService.deletePaymentSlip(slip.id!);
-        await _loadSlips();
+    try {
+      await PlatformService.deleteSlipImage(slip.imagePath);
+      await DatabaseService.deletePaymentSlip(slip.id!);
+      await _loadSlips();
 
-        if (mounted) {
-          showFToast(
-            context: context,
-            title: const Text('Success'),
-            description: const Text('Slip deleted successfully'),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          showFToast(context: context, title: const Text('Error'), description: Text('Error deleting slip: $e'));
-        }
+      if (mounted) {
+        showFToast(
+          context: context,
+          title: const Text('Success'),
+          description: const Text('Slip deleted successfully'),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        showFToast(context: context, title: const Text('Error'), description: Text('Error deleting slip: $e'));
       }
     }
   }
@@ -111,7 +90,7 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
                       Text('Total Spending', style: theme.typography.lg),
                       const SizedBox(height: 8),
                       Text(
-                        '\$${_totalAmount.toStringAsFixed(2)}',
+                        '฿${_totalAmount.toStringAsFixed(2)}',
                         style: theme.typography.xl4.copyWith(fontWeight: FontWeight.bold, color: theme.colors.primary),
                       ),
                       Text(
@@ -136,62 +115,14 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
                           itemCount: _slips.length,
                           itemBuilder: (context, index) {
                             final slip = _slips[index];
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 8.0),
-                              child: GestureDetector(
-                                onTap: () {
-                                  context.router.push(SlipDetailRoute(slip: slip)).then((_) => _loadSlips());
-                                },
-                                child: Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    color: theme.colors.background,
-                                    border: Border.all(color: theme.colors.border),
-                                    borderRadius: theme.style.borderRadius,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 40,
-                                        height: 40,
-                                        decoration: BoxDecoration(color: theme.colors.primary, shape: BoxShape.circle),
-                                        child: Center(
-                                          child: Text(
-                                            '\$',
-                                            style: TextStyle(
-                                              color: theme.colors.primaryForeground,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 18,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              '\$${slip.amount.toStringAsFixed(2)}',
-                                              style: theme.typography.lg.copyWith(fontWeight: FontWeight.bold),
-                                            ),
-                                            Text(
-                                              DateFormat('MMM dd, yyyy').format(slip.date),
-                                              style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      FButton(
-                                        style: FButtonStyle.destructive(),
-                                        onPress: () => _deleteSlip(slip),
-                                        prefix: Icon(FIcons.trash2, size: 16),
-                                        child: const Text('Delete'),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                            return SlipListTile(
+                              slip: slip,
+                              onTap: () => context.router.push(SlipDetailRoute(slip: slip)).then((_) => _loadSlips()),
+                              trailing: FButton(
+                                style: FButtonStyle.destructive(),
+                                onPress: () => _deleteSlip(slip),
+                                prefix: Icon(FIcons.trash2, size: 16),
+                                child: const Text('Delete'),
                               ),
                             );
                           },
