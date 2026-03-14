@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/payment_slip.dart';
@@ -5,11 +6,21 @@ import 'extraction_notifier.dart';
 
 class DatabaseService {
   static Database? _database;
+  static Completer<Database>? _initCompleter;
 
   static Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDatabase();
-    return _database!;
+    if (_initCompleter != null) return _initCompleter!.future;
+    _initCompleter = Completer<Database>();
+    try {
+      final db = await _initDatabase();
+      _database = db;
+      _initCompleter!.complete(db);
+      return db;
+    } catch (e) {
+      _initCompleter = null;
+      rethrow;
+    }
   }
 
   static Future<Database> _initDatabase() async {
