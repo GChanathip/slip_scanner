@@ -9,10 +9,20 @@ class PhotoScanner {
     private let ocrService = OCRService()
 
     private let stateLock = NSLock()
-    private var _isCancelled = false
-    private var isCancelled: Bool {
-        get { stateLock.lock(); defer { stateLock.unlock() }; return _isCancelled }
-        set { stateLock.lock(); defer { stateLock.unlock() }; _isCancelled = newValue }
+    private var _activeScanId: UUID?
+
+    /// Creates a new scan token and returns it. Implicitly invalidates any previous scan.
+    private func startNewScan() -> UUID {
+        stateLock.lock(); defer { stateLock.unlock() }
+        let id = UUID()
+        _activeScanId = id
+        return id
+    }
+
+    /// Returns true if the given scan token is no longer the active scan.
+    private func isScanCancelled(_ scanId: UUID) -> Bool {
+        stateLock.lock(); defer { stateLock.unlock() }
+        return _activeScanId != scanId
     }
 
     private lazy var maxConcurrentOperations: Int = {
@@ -26,14 +36,15 @@ class PhotoScanner {
     // MARK: - Cancellation
 
     func cancelScanning() {
-        isCancelled = true
+        stateLock.lock(); defer { stateLock.unlock() }
+        _activeScanId = nil
     }
 
     // MARK: - Bulk Scanning
 
     func scanAllPhotos(processedAssetIds: Set<String>, result: @escaping FlutterResult) {
-        cancelScanning()
-        isCancelled = false
+        // Generate a fresh token; this implicitly invalidates any in-flight scan.
+        let scanId = startNewScan()
 
         let status = PHPhotoLibrary.authorizationStatus()
 
@@ -42,7 +53,7 @@ class PhotoScanner {
                 PHPhotoLibrary.requestAuthorization { [weak self] newStatus in
                     DispatchQueue.main.async {
                         if newStatus == .authorized || newStatus == .limited {
-                            self?.startBackgroundScanning(processedAssetIds: processedAssetIds, result: result)
+                            self?.startBackgroundScanning(scanId: scanId, processedAssetIds: processedAssetIds, result: result)
                         } else {
                             result(FlutterError(code: "PERMISSION_DENIED", message: "Photo library access denied", details: nil))
                         }
@@ -54,21 +65,21 @@ class PhotoScanner {
             return
         }
 
-        startBackgroundScanning(processedAssetIds: processedAssetIds, result: result)
+        startBackgroundScanning(scanId: scanId, processedAssetIds: processedAssetIds, result: result)
     }
 
-    private func startBackgroundScanning(processedAssetIds: Set<String>, result: @escaping FlutterResult) {
+    private func startBackgroundScanning(scanId: UUID, processedAssetIds: Set<String>, result: @escaping FlutterResult) {
         // Return immediately - don't block platform/UI thread
         result(["status": "started", "message": "Scanning started"])
 
         // Run on background thread (NOT Task{} which inherits MainActor)
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.performStreamingScanning(processedAssetIds: processedAssetIds)
+            self?.performStreamingScanning(scanId: scanId, processedAssetIds: processedAssetIds)
         }
     }
 
     // MARK: - Streaming Scan (real-time progress, NO chunking, NO throttling)
-    private func performStreamingScanning(processedAssetIds: Set<String>) {
+    private func performStreamingScanning(scanId: UUID, processedAssetIds: Set<String>) {
         let fetchOptions = PHFetchOptions()
         fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
         fetchOptions.predicate = NSPredicate(format: "mediaType == %d", PHAssetMediaType.image.rawValue)
@@ -106,7 +117,7 @@ class PhotoScanner {
 
         // Add ALL operations at once - OperationQueue handles concurrency
         for i in 0..<totalCount {
-            guard !isCancelled else { break }
+            guard !isScanCancelled(scanId) else { break }
 
             let asset = assets.object(at: i)
 
@@ -139,7 +150,7 @@ class PhotoScanner {
 
             operationQueue.addOperation { [weak self] in
                 defer { completionGroup.leave() }
-                guard let self = self, !self.isCancelled else { return }
+                guard let self = self, !self.isScanCancelled(scanId) else { return }
 
                 // Process single image with autoreleasepool
                 autoreleasepool {
