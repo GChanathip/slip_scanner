@@ -68,18 +68,18 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/sqflite_darwin/darwin"
 
 SPEC CHECKSUMS:
-  cactus: 9fedf6b8c367d17e3e82e3a86d510f60ae54db74
-  device_info_plus: bf2e3232933866d73fe290f2942f2156cdd10342
+  cactus: 8c7f4da7bf87fc172f05ef974065f2ca6c3e809c
+  device_info_plus: 21fcca2080fbcd348be798aa36c3e5ed849eefbe
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
-  image_picker_ios: 4f2f91b01abdb52842a8e277617df877e40f905b
+  image_picker_ios: e0ece4aa2a75771a7de3fa735d26d90817041326
   ObjectBox: 26871f7cce80a8bd2e610bf944aeaded730f6925
-  objectbox_flutter_libs: 7d74f519c4385e7404f8a024074f7175f00a4945
-  package_info_plus: c0502532a26c7662a62a356cebe2692ec5fe4ec4
-  path_provider_foundation: 0b743cbb62d8e47eab856f09262bb8c1ddcfe6ba
-  permission_handler_apple: 9878588469a2b0d0fc1e048d9f43605f92e6cec2
-  record_ios: 840d21cce013c5a3b2168b74a54ebdb4136359e2
-  shared_preferences_foundation: 5086985c1d43c5ba4d5e69a4e8083a389e2909e6
-  sqflite_darwin: 5a7236e3b501866c1c9befc6771dfd73ffb8702d
+  objectbox_flutter_libs: 28e7bd5ae78e831f141679c8a6e31632453b959f
+  package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
+  path_provider_foundation: bb55f6dbba17d0dccd6737fe6f7f34fbd0376880
+  permission_handler_apple: 4ed2196e43d0651e8ff7ca3483a069d469701f2d
+  record_ios: f75fa1d57f840012775c0e93a38a7f3ceea1a374
+  shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
+  sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
 
 PODFILE CHECKSUM: 8385d8664da53ebfd40ceece3ed2e27292bb9b61
 

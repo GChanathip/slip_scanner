@@ -11,9 +11,9 @@ abstract class ScanningState with _$ScanningState {
     @Default(0) int totalPhotos,
     @Default(0) int processedPhotos,
     @Default(0) int slipsFound,
+    @Default(0) int iCloudSkipped,
     @Default(false) bool isComplete,
     String? error,
-    @Default([]) List<Map<String, dynamic>> accumulatedSlips,
   }) = _ScanningState;
 
   double get progress => totalPhotos > 0 ? processedPhotos / totalPhotos : 0.0;

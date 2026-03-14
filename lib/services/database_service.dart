@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/payment_slip.dart';
@@ -5,18 +6,28 @@ import 'extraction_notifier.dart';
 
 class DatabaseService {
   static Database? _database;
+  static Completer<Database>? _initCompleter;
 
   static Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDatabase();
-    return _database!;
+    if (_initCompleter != null) return _initCompleter!.future;
+    _initCompleter = Completer<Database>();
+    try {
+      final db = await _initDatabase();
+      _database = db;
+      _initCompleter!.complete(db);
+      return db;
+    } catch (e) {
+      _initCompleter = null;
+      rethrow;
+    }
   }
 
   static Future<Database> _initDatabase() async {
     String path = join(await getDatabasesPath(), 'payment_slips.db');
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -42,7 +53,8 @@ class DatabaseService {
         transactionTime TEXT,
         llmProcessingStatus TEXT DEFAULT 'pending',
         ragIndexed INTEGER DEFAULT 0,
-        updatedAt TEXT
+        updatedAt TEXT,
+        retryCount INTEGER DEFAULT 0
       )
     ''');
 
@@ -97,6 +109,11 @@ class DatabaseService {
       await db.execute('ALTER TABLE payment_slips ADD COLUMN transactionTime TEXT');
 
       await db.execute('CREATE INDEX idx_referenceId ON payment_slips(referenceId)');
+    }
+
+    if (oldVersion < 5) {
+      // Add retry count for capping failed extraction retries
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN retryCount INTEGER DEFAULT 0');
     }
   }
 
@@ -328,7 +345,7 @@ class DatabaseService {
     return maps.map(PaymentSlip.fromMap).toList();
   }
 
-  /// Reset failed slips back to pending for retry
+  /// Reset failed slips back to pending for retry, only if retryCount < 3
   static Future<void> resetFailedToStatus(String newStatus) async {
     final db = await database;
     await db.update(
@@ -337,8 +354,17 @@ class DatabaseService {
         'llmProcessingStatus': newStatus,
         'updatedAt': DateTime.now().toIso8601String(),
       },
-      where: 'llmProcessingStatus = ?',
+      where: 'llmProcessingStatus = ? AND retryCount < 3',
       whereArgs: ['failed'],
+    );
+  }
+
+  /// Increment retryCount for a slip (called when extraction fails)
+  static Future<void> incrementRetryCount(int id) async {
+    final db = await database;
+    await db.rawUpdate(
+      'UPDATE payment_slips SET retryCount = retryCount + 1, updatedAt = ? WHERE id = ?',
+      [DateTime.now().toIso8601String(), id],
     );
   }
 

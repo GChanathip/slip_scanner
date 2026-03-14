@@ -3,100 +3,16 @@ import 'package:flutter/foundation.dart';
 import 'dart:async';
 import '../services/platform_service.dart';
 import '../services/database_service.dart';
-import '../models/payment_slip.dart';
+import '../utils/slip_conversion.dart';
 import 'scanning_state.dart';
 
 part 'scanning_provider.g.dart';
-
-/// Helper to convert empty strings from iOS to null
-String? _nonEmpty(dynamic value) {
-  if (value == null) return null;
-  final str = value.toString().trim();
-  return str.isEmpty ? null : str;
-}
-
-/// Top-level function for isolate - must be outside class
-List<PaymentSlip> convertSlipsInIsolate(List<dynamic> slips) {
-  return slips.map((slip) {
-    final slipData = Map<String, dynamic>.from(slip);
-
-    // Parse date
-    DateTime slipDate = DateTime.now();
-    if (slipData['date'] != null && slipData['date'].toString().isNotEmpty) {
-      slipDate = _parseThaiDateInIsolate(slipData['date']) ?? DateTime.now();
-    }
-
-    // Parse amount
-    double amount = 0.0;
-    if (slipData['amount'] != null) {
-      if (slipData['amount'] is int) {
-        amount = (slipData['amount'] as int).toDouble();
-      } else if (slipData['amount'] is double) {
-        amount = slipData['amount'] as double;
-      } else {
-        amount = double.tryParse(slipData['amount'].toString()) ?? 0.0;
-      }
-    }
-
-    return PaymentSlip(
-      imagePath: slipData['assetId'] ?? '',
-      assetId: slipData['assetId'],
-      amount: amount,
-      date: slipDate,
-      extractedText: slipData['text'] ?? '',
-      createdAt: DateTime.now(),
-      recipientName: _nonEmpty(slipData['receiverName']),
-      senderName: _nonEmpty(slipData['senderName']),
-      referenceId: _nonEmpty(slipData['referenceId']),
-      senderAccount: _nonEmpty(slipData['senderAccount']),
-      receiverAccount: _nonEmpty(slipData['receiverAccount']),
-      transactionTime: _nonEmpty(slipData['time']),
-    );
-  }).toList();
-}
-
-/// Parse Thai date - standalone function for isolate
-DateTime? _parseThaiDateInIsolate(String dateStr) {
-  try {
-    // Handle already converted dates (from iOS helper)
-    if (dateStr.contains('/')) {
-      List<String> parts = dateStr.split('/');
-      if (parts.length == 3) {
-        // Check if it's already in DD/MM/YYYY format from iOS conversion
-        if (parts[2].length == 4) {
-          return DateTime(
-            int.parse(parts[2]), // Year
-            int.parse(parts[1]), // Month
-            int.parse(parts[0]), // Day
-          );
-        }
-      }
-    }
-
-    // Handle hyphen-separated dates
-    if (dateStr.contains('-')) {
-      List<String> parts = dateStr.split('-');
-      if (parts.length == 3) {
-        if (parts[0].length == 4) {
-          // YYYY-MM-DD
-          return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
-        } else {
-          // DD-MM-YYYY
-          return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
-        }
-      }
-    }
-  } catch (e) {
-    // If parsing fails, return null to use current date
-  }
-
-  return null;
-}
 
 @Riverpod(keepAlive: true)
 class Scanning extends _$Scanning {
   StreamSubscription? _progressSubscription;
   StreamSubscription? _partialResultsSubscription;
+  final List<Future<void>> _pendingInserts = [];
 
   @override
   ScanningState build() {
@@ -133,9 +49,12 @@ class Scanning extends _$Scanning {
     await Future.delayed(const Duration(milliseconds: 100));
 
     try {
+      // Fetch already-processed asset IDs so iOS can skip them
+      final processedIds = await DatabaseService.getProcessedAssetIds();
+
       // Fire and forget - don't await! iOS returns immediately
       // Completion is detected via progress stream (isComplete: true)
-      await PlatformService.startScanning();
+      await PlatformService.startScanning(processedAssetIds: processedIds);
     } catch (e) {
       state = state.copyWith(error: e.toString(), isScanning: false);
     }
@@ -161,17 +80,20 @@ class Scanning extends _$Scanning {
         final newTotal = progress['total'] ?? 0;
         final newProcessed = progress['processed'] ?? 0;
         final newSlipsFound = progress['slipsFound'] ?? 0;
+        final newICloudSkipped = progress['iCloudSkipped'] ?? 0;
         final newIsComplete = progress['isComplete'] ?? false;
 
         // Only rebuild if values actually changed
         if (newTotal != state.totalPhotos ||
             newProcessed != state.processedPhotos ||
             newSlipsFound != state.slipsFound ||
+            newICloudSkipped != state.iCloudSkipped ||
             newIsComplete != state.isComplete) {
           state = state.copyWith(
             totalPhotos: newTotal,
             processedPhotos: newProcessed,
             slipsFound: newSlipsFound,
+            iCloudSkipped: newICloudSkipped,
             isComplete: newIsComplete,
           );
         }
@@ -187,18 +109,18 @@ class Scanning extends _$Scanning {
     );
   }
 
-  /// Listen to partial results from platform
+  /// Listen to partial results from platform.
+  /// Each batch is immediately converted and inserted to DB — no state accumulation.
   void _listenToPartialResults() {
     _partialResultsSubscription?.cancel();
     _partialResultsSubscription = PlatformService.getPartialResultsStream().listen(
       (partialData) {
         final slips = partialData['slips'] as List<dynamic>? ?? [];
         if (slips.isNotEmpty) {
-          final accumulated = List<Map<String, dynamic>>.from(state.accumulatedSlips);
-          for (final slip in slips) {
-            accumulated.add(Map<String, dynamic>.from(slip));
-          }
-          state = state.copyWith(accumulatedSlips: accumulated);
+          final raw = slips.map((s) => Map<String, dynamic>.from(s)).toList();
+          final future = _insertBatch(raw);
+          _pendingInserts.add(future);
+          future.whenComplete(() => _pendingInserts.remove(future));
         }
       },
       onError: (error) {
@@ -207,15 +129,21 @@ class Scanning extends _$Scanning {
     );
   }
 
-  /// Handle scan completion - called when progress stream sends isComplete: true
+  Future<void> _insertBatch(List<Map<String, dynamic>> raw) async {
+    final paymentSlips = await compute(convertSlipsInIsolate, raw);
+    await DatabaseService.insertPaymentSlipsBatch(paymentSlips);
+  }
+
+  /// Handle scan completion — wait for all in-flight batch inserts, then finish.
+  /// Cancels partial results listener first so no new inserts arrive during wait.
   Future<void> _handleScanComplete() async {
     try {
-      // Process accumulated slips from partial results in background isolate
-      if (state.accumulatedSlips.isNotEmpty) {
-        final paymentSlips = await compute(convertSlipsInIsolate, state.accumulatedSlips);
-        await DatabaseService.insertPaymentSlipsBatch(paymentSlips);
+      _partialResultsSubscription?.cancel();
+      _partialResultsSubscription = null;
+      if (_pendingInserts.isNotEmpty) {
+        await Future.wait(List.of(_pendingInserts));
       }
-
+      _pendingInserts.clear();
       state = state.copyWith(isScanning: false);
     } catch (e) {
       state = state.copyWith(error: 'Failed to save results: $e', isScanning: false);
@@ -226,6 +154,7 @@ class Scanning extends _$Scanning {
   void reset() {
     _progressSubscription?.cancel();
     _partialResultsSubscription?.cancel();
+    _pendingInserts.clear();
     state = const ScanningState();
   }
 }

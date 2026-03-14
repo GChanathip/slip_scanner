@@ -24,7 +24,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _scrollController = ScrollController();
   // Store notifier reference to avoid using ref in dispose
   ExtractionQueue? _extractionNotifier;
-  bool _wasModelLoaded = false;
 
   @override
   void initState() {
@@ -35,11 +34,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ref.read(chatProvider.notifier).setDateRange(widget.startDate, widget.endDate);
       });
     }
-    // Pause background extraction while chatting to avoid lock contention
-    // This makes the chat feel more responsive
+    // Ref-counted pause: extraction yields while chat is active (avoids LLM lock contention).
+    // resumeExtraction() in dispose() is always called regardless of how the screen exits.
     Future.microtask(() {
       _extractionNotifier = ref.read(extractionQueueProvider.notifier);
-      _extractionNotifier?.stopBackgroundProcessing();
+      _extractionNotifier?.pauseExtraction();
     });
     // Ensure model is loaded
     _ensureModelLoaded();
@@ -49,12 +48,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final cactusState = ref.read(cactusProvider);
     if (!cactusState.isModelLoaded && !cactusState.isLoading) {
       await ref.read(cactusProvider.notifier).downloadAndInitialize(cactusState.selectedModel);
-      if (ref.read(cactusProvider).isModelLoaded) {
-        _wasModelLoaded = true;
-        // Don't start extraction here - we're in chat mode
-      }
-    } else if (cactusState.isModelLoaded) {
-      _wasModelLoaded = true;
     }
   }
 
@@ -62,11 +55,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
-    // Resume background extraction when leaving chat
-    // Use cached notifier reference to avoid using ref in dispose
-    if (_wasModelLoaded && _extractionNotifier != null) {
-      _extractionNotifier!.startBackgroundProcessing();
-    }
+    // Always resume — ref-count ensures extraction only unpauses when all callers do
+    _extractionNotifier?.resumeExtraction();
     super.dispose();
   }
 
@@ -183,14 +173,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               child: Row(
                 children: [
                   Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      decoration: InputDecoration(
-                        hintText: 'Ask about your expenses...',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      ),
-                      onSubmitted: (_) => _sendMessage(),
+                    child: FTextField(
+                      control: FTextFieldControl.managed(controller: _messageController),
+                      hint: 'Ask about your expenses...',
+                      onSubmit: (_) => _sendMessage(),
                       enabled: cactusState.isModelLoaded && !chatState.isGenerating,
                       maxLines: null,
                     ),
@@ -242,12 +228,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Widget _buildSuggestionChip(String text) {
-    return ActionChip(
-      label: Text(text),
-      onPressed: () {
+    return FButton(
+      style: FButtonStyle.outline(),
+      onPress: () {
         _messageController.text = text;
         _sendMessage();
       },
+      child: Text(text),
     );
   }
 

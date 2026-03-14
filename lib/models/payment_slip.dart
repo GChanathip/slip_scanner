@@ -23,6 +23,7 @@ class PaymentSlip {
   final String llmProcessingStatus; // 'pending', 'processing', 'completed', 'failed'
   final bool ragIndexed;
   final DateTime? updatedAt;
+  final int retryCount;
 
   PaymentSlip({
     this.id,
@@ -43,6 +44,7 @@ class PaymentSlip {
     this.llmProcessingStatus = 'pending',
     this.ragIndexed = false,
     this.updatedAt,
+    this.retryCount = 0,
   });
 
   Map<String, dynamic> toMap() {
@@ -65,6 +67,7 @@ class PaymentSlip {
       'llmProcessingStatus': llmProcessingStatus,
       'ragIndexed': ragIndexed ? 1 : 0,
       'updatedAt': updatedAt?.toIso8601String(),
+      'retryCount': retryCount,
     };
   }
 
@@ -88,6 +91,7 @@ class PaymentSlip {
       llmProcessingStatus: map['llmProcessingStatus'] ?? 'pending',
       ragIndexed: (map['ragIndexed'] ?? 0) == 1,
       updatedAt: map['updatedAt'] != null ? DateTime.parse(map['updatedAt']) : null,
+      retryCount: map['retryCount'] as int? ?? 0,
     );
   }
 
@@ -111,6 +115,7 @@ class PaymentSlip {
     String? llmProcessingStatus,
     bool? ragIndexed,
     DateTime? updatedAt,
+    int? retryCount,
   }) {
     return PaymentSlip(
       id: id ?? this.id,
@@ -131,6 +136,7 @@ class PaymentSlip {
       llmProcessingStatus: llmProcessingStatus ?? this.llmProcessingStatus,
       ragIndexed: ragIndexed ?? this.ragIndexed,
       updatedAt: updatedAt ?? this.updatedAt,
+      retryCount: retryCount ?? this.retryCount,
     );
   }
 }

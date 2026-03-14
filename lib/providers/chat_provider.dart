@@ -61,7 +61,7 @@ class Chat extends _$Chat {
       final streamResult = await CactusService.instance.generateCompletionStream(llmMessages);
 
       // Add streaming assistant message
-      var assistantContent = '';
+      final contentBuffer = StringBuffer();
       final assistantMsg = ChatMessageModel(
         role: 'assistant',
         content: '',
@@ -70,17 +70,23 @@ class Chat extends _$Chat {
       );
       state = state.copyWith(messages: [...state.messages, assistantMsg]);
 
+      // Batch state updates to every 100ms instead of per-token
+      var lastUpdateMs = DateTime.now().millisecondsSinceEpoch;
       await for (final chunk in streamResult.stream) {
-        assistantContent += chunk;
-        final updatedMsg = assistantMsg.copyWith(content: assistantContent);
-        state = state.copyWith(
-          messages: [...state.messages.sublist(0, state.messages.length - 1), updatedMsg],
-        );
+        contentBuffer.write(chunk);
+        final nowMs = DateTime.now().millisecondsSinceEpoch;
+        if (nowMs - lastUpdateMs >= 100) {
+          final updatedMsg = assistantMsg.copyWith(content: contentBuffer.toString());
+          state = state.copyWith(
+            messages: [...state.messages.sublist(0, state.messages.length - 1), updatedMsg],
+          );
+          lastUpdateMs = nowMs;
+        }
       }
 
-      // Finalize message
+      // Finalize message — always flush the buffer
       final finalMsg = assistantMsg.copyWith(
-        content: assistantContent,
+        content: contentBuffer.toString(),
         isStreaming: false,
       );
       state = state.copyWith(
