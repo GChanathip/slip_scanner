@@ -456,10 +456,12 @@ private struct RegexPatterns {
         let time = extractTimeFromText(text)
         let accounts = extractAccountNumbers(text)
 
+        let normalizedDate = date.map { normalizeToISODate($0) } ?? ""
+
         return [
             "text": String(text.prefix(10000)),
             "amount": amount,
-            "date": String((date ?? "").prefix(50)),
+            "date": String(normalizedDate.prefix(50)),
             "assetId": String(identifier.prefix(100)),
             "createdAt": dateFormatter.string(from: Date()),
             "referenceId": referenceId ?? "",
@@ -721,6 +723,36 @@ private struct RegexPatterns {
     private func containsBuddhistYear(_ dateString: String) -> Bool {
         let range = NSRange(location: 0, length: dateString.count)
         return RegexPatterns.buddhistYearPattern.firstMatch(in: dateString, options: [], range: range) != nil
+    }
+
+    /// Normalize any extracted date string to ISO `yyyy-MM-dd` format.
+    /// Returns the original string unchanged if no known format is recognized.
+    private func normalizeToISODate(_ dateStr: String) -> String {
+        let trimmed = dateStr.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let outputFormatter = DateFormatter()
+        outputFormatter.locale = Locale(identifier: "en_US_POSIX")
+        outputFormatter.dateFormat = "yyyy-MM-dd"
+
+        let inputLocale = Locale(identifier: "en_US")
+        let inputFormats = [
+            "dd/MM/yyyy", "d/M/yyyy",
+            "yyyy/MM/dd",
+            "yyyy-MM-dd",
+            "dd-MM-yyyy", "d-M-yyyy",
+            "dd MMM yyyy", "d MMM yyyy",
+            "dd MMMM yyyy", "d MMMM yyyy",
+        ]
+
+        for format in inputFormats {
+            let formatter = DateFormatter()
+            formatter.locale = inputLocale
+            formatter.dateFormat = format
+            if let date = formatter.date(from: trimmed) {
+                return outputFormatter.string(from: date)
+            }
+        }
+        return trimmed
     }
 
     private func convertBuddhistToGregorian(_ dateString: String) -> String {

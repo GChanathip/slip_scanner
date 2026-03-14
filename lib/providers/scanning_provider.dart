@@ -55,35 +55,45 @@ List<PaymentSlip> convertSlipsInIsolate(List<dynamic> slips) {
   }).toList();
 }
 
+const _englishMonths = {
+  'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+  'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+};
+
 /// Parse Thai date - standalone function for isolate
 DateTime? _parseThaiDateInIsolate(String dateStr) {
   try {
-    // Handle already converted dates (from iOS helper)
-    if (dateStr.contains('/')) {
-      List<String> parts = dateStr.split('/');
-      if (parts.length == 3) {
-        // Check if it's already in DD/MM/YYYY format from iOS conversion
-        if (parts[2].length == 4) {
-          return DateTime(
-            int.parse(parts[2]), // Year
-            int.parse(parts[1]), // Month
-            int.parse(parts[0]), // Day
-          );
-        }
-      }
-    }
+    final s = dateStr.trim();
 
-    // Handle hyphen-separated dates
-    if (dateStr.contains('-')) {
-      List<String> parts = dateStr.split('-');
+    // YYYY-MM-DD (ISO, primary output from iOS normalizeToISODate)
+    if (s.contains('-')) {
+      final parts = s.split('-');
       if (parts.length == 3) {
         if (parts[0].length == 4) {
-          // YYYY-MM-DD
           return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
         } else {
           // DD-MM-YYYY
           return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
         }
+      }
+    }
+
+    // DD/MM/YYYY (from iOS convertBuddhistToGregorian)
+    if (s.contains('/')) {
+      final parts = s.split('/');
+      if (parts.length == 3 && parts[2].length == 4) {
+        return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+      }
+    }
+
+    // "15 Mar 2024" or "5 March 2024" — English abbreviated/full month
+    final spaced = s.split(RegExp(r'\s+'));
+    if (spaced.length == 3) {
+      final day = int.tryParse(spaced[0]);
+      final month = _englishMonths[spaced[1].substring(0, 3).toLowerCase()];
+      final year = int.tryParse(spaced[2]);
+      if (day != null && month != null && year != null) {
+        return DateTime(year, month, day);
       }
     }
   } catch (e) {
