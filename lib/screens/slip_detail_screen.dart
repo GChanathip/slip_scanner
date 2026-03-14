@@ -244,7 +244,7 @@ class _SlipDetailScreenState extends State<SlipDetailScreen> {
 
           // Delete Button (at bottom)
           FButton(
-            style: FButtonStyle.destructive(),
+            variant: FButtonVariant.destructive,
             onPress: () => _deleteSlip(context),
             prefix: Icon(FIcons.trash2, size: 16),
             child: const Text('Delete Slip'),

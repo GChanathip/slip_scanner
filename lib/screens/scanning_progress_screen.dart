@@ -108,7 +108,7 @@ class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen>
               _buildStatsCard(theme, scanningState),
               const SizedBox(height: 32),
               if (scanningState.isScanning)
-                FButton(style: FButtonStyle.outline(), onPress: _cancelScanning, child: const Text('Cancel Scanning')),
+                FButton(variant: FButtonVariant.outline, onPress: _cancelScanning, child: const Text('Cancel Scanning')),
             ],
           ),
         ),
@@ -196,7 +196,6 @@ class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen>
     showFDialog(
       context: context,
       builder: (dialogContext, style, animation) => FDialog(
-        style: (_) => style,
         animation: animation,
         title: const Text('Scanning Complete'),
         body: Text('Processed $processed photos and found $found payment slips.$skippedNote'),

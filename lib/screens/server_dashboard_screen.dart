@@ -155,7 +155,7 @@ class _ServerDashboardScreenState extends State<ServerDashboardScreen> {
             _serverService.isRunning
                 ? FButton(
                     onPress: _isLoading ? null : _toggleServer,
-                    style: FButtonStyle.destructive(),
+                    variant: FButtonVariant.destructive,
                     child: const Text('Stop'),
                   )
                 : FButton(
@@ -191,7 +191,7 @@ class _ServerDashboardScreenState extends State<ServerDashboardScreen> {
             if (!_serverService.isRunning)
               FButton(
                 onPress: _saveConfig,
-                style: FButtonStyle.outline(),
+                variant: FButtonVariant.outline,
                 child: const Text('Save'),
               ),
           ],

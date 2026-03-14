@@ -136,7 +136,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     LinearProgressIndicator(value: cactusState.isDownloading ? cactusState.downloadProgress : null),
                   ] else if (cactusState.error != null) ...[
                     FAlert(
-                      style: FAlertStyle.destructive(),
+                      variant: FAlertVariant.destructive,
                       title: const Text('Model Error'),
                       subtitle: Text(cactusState.error!),
                     ),
@@ -229,7 +229,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Widget _buildSuggestionChip(String text) {
     return FButton(
-      style: FButtonStyle.outline(),
+      variant: FButtonVariant.outline,
       onPress: () {
         _messageController.text = text;
         _sendMessage();

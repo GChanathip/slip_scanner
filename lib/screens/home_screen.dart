@@ -200,7 +200,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       child: Padding(
                         padding: const EdgeInsets.only(top: 8),
                         child: FButton(
-                          style: FButtonStyle.ghost(),
+                          variant: FButtonVariant.ghost,
                           onPress: () {
                             context.router.push(MonthlyViewRoute(month: DateTime.now())).then((_) => _loadData());
                           },

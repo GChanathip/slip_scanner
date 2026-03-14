@@ -78,7 +78,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   const SizedBox(height: 12),
                   FButton(
-                    style: FButtonStyle.outline(),
+                    variant: FButtonVariant.outline,
                     onPress: () {
                       ref.read(cactusProvider.notifier).unloadModel();
                       ref.read(extractionQueueProvider.notifier).stopBackgroundProcessing();
@@ -96,7 +96,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ] else if (cactusState.error != null) ...[
                   FAlert(
-                    style: FAlertStyle.destructive(),
+                    variant: FAlertVariant.destructive,
                     title: const Text('Error'),
                     subtitle: Text(cactusState.error!),
                   ),
@@ -143,7 +143,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 if (extractionState.failedCount > 0) ...[
                   const SizedBox(height: 12),
                   FButton(
-                    style: FButtonStyle.outline(),
+                    variant: FButtonVariant.outline,
                     onPress: () {
                       ref.read(extractionQueueProvider.notifier).retryFailed();
                     },
