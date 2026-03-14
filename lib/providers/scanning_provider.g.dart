@@ -41,7 +41,7 @@ final class ScanningProvider
   }
 }
 
-String _$scanningHash() => r'e719630c2db15da20d5f82d6824ee9852a24c5cb';
+String _$scanningHash() => r'c9ad63ce3b0786b6d039dc9132fd56769dca37c3';
 
 abstract class _$Scanning extends $Notifier<ScanningState> {
   ScanningState build();

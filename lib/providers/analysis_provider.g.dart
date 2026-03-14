@@ -41,7 +41,7 @@ final class AnalysisProvider
   }
 }
 
-String _$analysisHash() => r'f6c499d3725e9fe42f464aeb89ff4729b1484b7c';
+String _$analysisHash() => r'83f38ba8589dff9e9288d8b429b282f0d772c33f';
 
 abstract class _$Analysis extends $Notifier<AnalysisState> {
   AnalysisState build();

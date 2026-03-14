@@ -27,7 +27,7 @@ class DatabaseService {
     String path = join(await getDatabasesPath(), 'payment_slips.db');
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -53,7 +53,8 @@ class DatabaseService {
         transactionTime TEXT,
         llmProcessingStatus TEXT DEFAULT 'pending',
         ragIndexed INTEGER DEFAULT 0,
-        updatedAt TEXT
+        updatedAt TEXT,
+        retryCount INTEGER DEFAULT 0
       )
     ''');
 
@@ -108,6 +109,11 @@ class DatabaseService {
       await db.execute('ALTER TABLE payment_slips ADD COLUMN transactionTime TEXT');
 
       await db.execute('CREATE INDEX idx_referenceId ON payment_slips(referenceId)');
+    }
+
+    if (oldVersion < 5) {
+      // Add retry count for capping failed extraction retries
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN retryCount INTEGER DEFAULT 0');
     }
   }
 
@@ -339,7 +345,7 @@ class DatabaseService {
     return maps.map(PaymentSlip.fromMap).toList();
   }
 
-  /// Reset failed slips back to pending for retry
+  /// Reset failed slips back to pending for retry, only if retryCount < 3
   static Future<void> resetFailedToStatus(String newStatus) async {
     final db = await database;
     await db.update(
@@ -348,8 +354,17 @@ class DatabaseService {
         'llmProcessingStatus': newStatus,
         'updatedAt': DateTime.now().toIso8601String(),
       },
-      where: 'llmProcessingStatus = ?',
+      where: 'llmProcessingStatus = ? AND retryCount < 3',
       whereArgs: ['failed'],
+    );
+  }
+
+  /// Increment retryCount for a slip (called when extraction fails)
+  static Future<void> incrementRetryCount(int id) async {
+    final db = await database;
+    await db.rawUpdate(
+      'UPDATE payment_slips SET retryCount = retryCount + 1, updatedAt = ? WHERE id = ?',
+      [DateTime.now().toIso8601String(), id],
     );
   }
 

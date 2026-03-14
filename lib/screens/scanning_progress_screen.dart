@@ -26,7 +26,7 @@ class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen>
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             final state = ref.read(scanningProvider);
-            _showCompletionDialog(state.processedPhotos, state.slipsFound);
+            _showCompletionDialog(state.processedPhotos, state.slipsFound, state.iCloudSkipped);
           }
         });
       }
@@ -170,20 +170,36 @@ class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen>
                 ),
               ],
             ),
+            if (scanningState.iCloudSkipped > 0) ...[
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('iCloud Photos Skipped:'),
+                  Text(
+                    '${scanningState.iCloudSkipped}',
+                    style: TextStyle(fontWeight: FontWeight.bold, color: theme.colors.mutedForeground),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  void _showCompletionDialog(int processed, int found) {
+  void _showCompletionDialog(int processed, int found, int iCloudSkipped) {
+    final skippedNote = iCloudSkipped > 0
+        ? ' $iCloudSkipped photo${iCloudSkipped == 1 ? ' was' : 's were'} skipped because they are stored in iCloud and not downloaded to this device.'
+        : '';
     showFDialog(
       context: context,
       builder: (dialogContext, style, animation) => FDialog(
         style: (_) => style,
         animation: animation,
         title: const Text('Scanning Complete'),
-        body: Text('Processed $processed photos and found $found payment slips.'),
+        body: Text('Processed $processed photos and found $found payment slips.$skippedNote'),
         direction: Axis.vertical,
         actions: [
           FButton(

@@ -11,6 +11,7 @@ abstract class ScanningState with _$ScanningState {
     @Default(0) int totalPhotos,
     @Default(0) int processedPhotos,
     @Default(0) int slipsFound,
+    @Default(0) int iCloudSkipped,
     @Default(false) bool isComplete,
     String? error,
   }) = _ScanningState;

@@ -41,7 +41,7 @@ final class ExtractionQueueProvider
   }
 }
 
-String _$extractionQueueHash() => r'c6352151467cb06ba9141204d074cbec75568e91';
+String _$extractionQueueHash() => r'7260184ce0cfc5103b472377845547376a2259a9';
 
 abstract class _$ExtractionQueue extends $Notifier<ExtractionQueueState> {
   ExtractionQueueState build();

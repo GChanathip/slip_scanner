@@ -175,17 +175,20 @@ class Scanning extends _$Scanning {
         final newTotal = progress['total'] ?? 0;
         final newProcessed = progress['processed'] ?? 0;
         final newSlipsFound = progress['slipsFound'] ?? 0;
+        final newICloudSkipped = progress['iCloudSkipped'] ?? 0;
         final newIsComplete = progress['isComplete'] ?? false;
 
         // Only rebuild if values actually changed
         if (newTotal != state.totalPhotos ||
             newProcessed != state.processedPhotos ||
             newSlipsFound != state.slipsFound ||
+            newICloudSkipped != state.iCloudSkipped ||
             newIsComplete != state.isComplete) {
           state = state.copyWith(
             totalPhotos: newTotal,
             processedPhotos: newProcessed,
             slipsFound: newSlipsFound,
+            iCloudSkipped: newICloudSkipped,
             isComplete: newIsComplete,
           );
         }

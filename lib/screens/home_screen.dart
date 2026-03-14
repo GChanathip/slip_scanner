@@ -36,11 +36,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      final slips = await DatabaseService.getPaymentSlips();
-      final totals = await DatabaseService.getMonthlyTotals();
+      final results = await Future.wait([
+        DatabaseService.getPaymentSlips(),
+        DatabaseService.getMonthlyTotals(),
+      ]);
       setState(() {
-        _recentSlips = slips.take(5).toList();
-        _monthlyTotals = totals;
+        _recentSlips = (results[0] as List<PaymentSlip>).take(5).toList();
+        _monthlyTotals = results[1] as Map<String, double>;
       });
     } finally {
       setState(() => _isLoading = false);
