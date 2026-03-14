@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'dart:async';
+import 'dart:typed_data';
 
 class PlatformService {
   static const MethodChannel _channel = MethodChannel('com.example.slip_scanner/vision');
@@ -106,6 +107,21 @@ class PlatformService {
       return result;
     } on PlatformException catch (e) {
       throw Exception('Failed to delete slip image: ${e.message}');
+    }
+  }
+
+  /// Load image bytes from a PHAsset local identifier (batch-scanned slips).
+  /// Returns null if the asset is not found or cannot be loaded.
+  static Future<Uint8List?> loadImageFromAsset(String assetId) async {
+    try {
+      final result = await _channel.invokeMethod('loadImageFromAsset', {
+        'assetId': assetId,
+      });
+      if (result is Uint8List) return result;
+      if (result is List) return Uint8List.fromList(result.cast<int>());
+      return null;
+    } on PlatformException {
+      return null;
     }
   }
 }

@@ -190,6 +190,13 @@ private struct RegexPatterns {
                     return
                 }
                 self?.deleteSlipImage(imagePath: imagePath, result: result)
+            case "loadImageFromAsset":
+                guard let args = call.arguments as? [String: Any],
+                      let assetId = args["assetId"] as? String else {
+                    result(FlutterError(code: "INVALID_ARGUMENT", message: "Asset ID required", details: nil))
+                    return
+                }
+                self?.loadImageFromAsset(assetId: assetId, result: result)
             default:
                 result(FlutterMethodNotImplemented)
             }
@@ -536,6 +543,32 @@ private struct RegexPatterns {
             result(true)
         } catch {
             result(FlutterError(code: "DELETE_ERROR", message: error.localizedDescription, details: nil))
+        }
+    }
+
+    private func loadImageFromAsset(assetId: String, result: @escaping FlutterResult) {
+        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [assetId], options: nil)
+        guard let asset = fetchResult.firstObject else {
+            result(FlutterError(code: "NOT_FOUND", message: "Asset not found", details: nil))
+            return
+        }
+
+        let requestOptions = PHImageRequestOptions()
+        requestOptions.isSynchronous = false
+        requestOptions.deliveryMode = .highQualityFormat
+        requestOptions.isNetworkAccessAllowed = false
+
+        PHImageManager.default().requestImage(
+            for: asset,
+            targetSize: CGSize(width: 1024, height: 1024),
+            contentMode: .aspectFit,
+            options: requestOptions
+        ) { image, _ in
+            if let image = image, let data = image.jpegData(compressionQuality: 0.8) {
+                result(FlutterStandardTypedData(bytes: data))
+            } else {
+                result(FlutterError(code: "IMAGE_ERROR", message: "Could not load image data", details: nil))
+            }
         }
     }
 
