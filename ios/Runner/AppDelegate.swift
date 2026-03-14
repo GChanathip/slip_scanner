@@ -261,6 +261,9 @@ private struct RegexPatterns {
         let counterLock = NSLock()
         var processedCount = 0
         var slipsFoundCount = 0
+        // Throttle state (guarded by counterLock)
+        var lastProgressSentCount = 0
+        var lastProgressSentNanos: UInt64 = DispatchTime.now().uptimeNanoseconds
 
         // Accumulate slips for batch sending (more efficient than one-by-one)
         let slipsLock = NSLock()
@@ -288,13 +291,22 @@ private struct RegexPatterns {
                 processedCount += 1
                 let currentProcessed = processedCount
                 let currentSlipsFound = slipsFoundCount
+                let nowNanos = DispatchTime.now().uptimeNanoseconds
+                let elapsedMs = Double(nowNanos - lastProgressSentNanos) / 1_000_000
+                let shouldSend = (currentProcessed - lastProgressSentCount) >= 50 || elapsedMs >= 200
+                if shouldSend {
+                    lastProgressSentCount = currentProcessed
+                    lastProgressSentNanos = nowNanos
+                }
                 counterLock.unlock()
-                sendProgressFromBackground(
-                    total: totalCount,
-                    processed: currentProcessed,
-                    slipsFound: currentSlipsFound,
-                    isComplete: false
-                )
+                if shouldSend {
+                    sendProgressFromBackground(
+                        total: totalCount,
+                        processed: currentProcessed,
+                        slipsFound: currentSlipsFound,
+                        isComplete: false
+                    )
+                }
                 continue
             }
 
@@ -316,6 +328,13 @@ private struct RegexPatterns {
                         slipsFoundCount += 1
                     }
                     let currentSlipsFound = slipsFoundCount
+                    let nowNanos = DispatchTime.now().uptimeNanoseconds
+                    let elapsedMs = Double(nowNanos - lastProgressSentNanos) / 1_000_000
+                    let shouldSendProgress = (currentProcessed - lastProgressSentCount) >= 50 || elapsedMs >= 200
+                    if shouldSendProgress {
+                        lastProgressSentCount = currentProcessed
+                        lastProgressSentNanos = nowNanos
+                    }
                     counterLock.unlock()
 
                     // Accumulate slip if found
@@ -335,14 +354,15 @@ private struct RegexPatterns {
                         }
                     }
 
-                    // Send progress after EVERY image (no throttling)
-                    // DispatchQueue.main.async is non-blocking, won't slow down OCR
-                    self.sendProgressFromBackground(
-                        total: totalCount,
-                        processed: currentProcessed,
-                        slipsFound: currentSlipsFound,
-                        isComplete: false
-                    )
+                    // Throttled progress: every 50 images or every 200ms
+                    if shouldSendProgress {
+                        self.sendProgressFromBackground(
+                            total: totalCount,
+                            processed: currentProcessed,
+                            slipsFound: currentSlipsFound,
+                            isComplete: false
+                        )
+                    }
                 }
             }
         }
