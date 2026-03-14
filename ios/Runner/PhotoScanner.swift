@@ -255,7 +255,7 @@ class PhotoScanner {
 
         PHImageManager.default().requestImage(
             for: asset,
-            targetSize: CGSize(width: 1024, height: 1024),
+            targetSize: CGSize(width: 512, height: 512),
             contentMode: .aspectFit,
             options: requestOptions
         ) { image, info in
@@ -356,10 +356,12 @@ class PhotoScanner {
             contentMode: .aspectFit,
             options: requestOptions
         ) { image, _ in
-            if let image = image, let data = image.jpegData(compressionQuality: 0.8) {
-                result(FlutterStandardTypedData(bytes: data))
-            } else {
-                result(FlutterError(code: "IMAGE_ERROR", message: "Could not load image data", details: nil))
+            DispatchQueue.main.async {
+                if let image = image, let data = image.jpegData(compressionQuality: 0.8) {
+                    result(FlutterStandardTypedData(bytes: data))
+                } else {
+                    result(FlutterError(code: "IMAGE_ERROR", message: "Could not load image data", details: nil))
+                }
             }
         }
     }

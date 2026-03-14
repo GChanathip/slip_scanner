@@ -107,14 +107,14 @@ class ExtractionQueue extends _$ExtractionQueue {
 
     while (_isRunning) {
       // Yield while paused (e.g., ChatScreen is active to avoid lock contention)
-      if (_pauseCount > 0) {
+      while (_pauseCount > 0 && _isRunning) {
         _workAvailable = Completer<void>();
         await Future.any([
           _workAvailable!.future,
           Future.delayed(const Duration(milliseconds: 500)),
         ]);
-        continue;
       }
+      if (!_isRunning) break;
 
       final cactusState = ref.read(cactusProvider);
       if (!cactusState.isModelLoaded) {

@@ -82,7 +82,7 @@ class OCRService {
 
     // MARK: - Amount Extraction
 
-    private func extractAmountFromText(_ text: String) -> Double? {
+    func extractAmountFromText(_ text: String) -> Double? {
         let nsText = text as NSString
         let range = NSRange(location: 0, length: nsText.length)
 
@@ -107,7 +107,7 @@ class OCRService {
 
     // MARK: - Date Extraction
 
-    private func extractDateFromText(_ text: String) -> String? {
+    func extractDateFromText(_ text: String) -> String? {
         let nsText = text as NSString
         let range = NSRange(location: 0, length: nsText.length)
 
@@ -143,7 +143,7 @@ class OCRService {
 
     // MARK: - Reference / Account / Name Extraction
 
-    private func extractReferenceId(_ text: String) -> String? {
+    func extractReferenceId(_ text: String) -> String? {
         let nsText = text as NSString
         let range = NSRange(location: 0, length: nsText.length)
 
@@ -156,7 +156,7 @@ class OCRService {
         return nil
     }
 
-    private func extractName(
+    func extractName(
         from text: String,
         labelPatterns: [NSRegularExpression],
         anchorMatchIndex: Int
@@ -193,15 +193,15 @@ class OCRService {
         return nil
     }
 
-    private func extractSenderName(_ text: String) -> String? {
+    func extractSenderName(_ text: String) -> String? {
         extractName(from: text, labelPatterns: RegexPatterns.senderNamePatterns, anchorMatchIndex: 0)
     }
 
-    private func extractReceiverName(_ text: String) -> String? {
+    func extractReceiverName(_ text: String) -> String? {
         extractName(from: text, labelPatterns: RegexPatterns.receiverNamePatterns, anchorMatchIndex: 1)
     }
 
-    private func extractAccountNumbers(_ text: String) -> [String] {
+    func extractAccountNumbers(_ text: String) -> [String] {
         let nsText = text as NSString
         let range = NSRange(location: 0, length: nsText.length)
 
@@ -218,7 +218,7 @@ class OCRService {
         return []
     }
 
-    private func extractTimeFromText(_ text: String) -> String? {
+    func extractTimeFromText(_ text: String) -> String? {
         let nsText = text as NSString
         let range = NSRange(location: 0, length: nsText.length)
 
@@ -233,22 +233,23 @@ class OCRService {
 
     // MARK: - Buddhist Calendar Helpers
 
-    private func containsBuddhistYear(_ dateString: String) -> Bool {
+    func containsBuddhistYear(_ dateString: String) -> Bool {
         let range = NSRange(location: 0, length: dateString.count)
         return RegexPatterns.buddhistYearPattern.firstMatch(in: dateString, options: [], range: range) != nil
     }
 
-    /// Normalize any extracted date string to ISO `yyyy-MM-dd` format.
-    /// Returns the original string unchanged if no known format is recognized.
-    private func normalizeToISODate(_ dateStr: String) -> String {
-        let trimmed = dateStr.trimmingCharacters(in: .whitespacesAndNewlines)
+    // MARK: - Cached Date Formatters (expensive to create, reuse across calls)
 
-        let outputFormatter = DateFormatter()
-        outputFormatter.locale = Locale(identifier: "en_US_POSIX")
-        outputFormatter.dateFormat = "yyyy-MM-dd"
+    private static let isoOutputFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
 
-        let inputLocale = Locale(identifier: "en_US")
-        let inputFormats = [
+    private static let dateInputFormatters: [DateFormatter] = {
+        let locale = Locale(identifier: "en_US")
+        let formats = [
             "dd/MM/yyyy", "d/M/yyyy",
             "yyyy/MM/dd",
             "yyyy-MM-dd",
@@ -256,19 +257,28 @@ class OCRService {
             "dd MMM yyyy", "d MMM yyyy",
             "dd MMMM yyyy", "d MMMM yyyy",
         ]
+        return formats.map { format in
+            let f = DateFormatter()
+            f.locale = locale
+            f.dateFormat = format
+            return f
+        }
+    }()
 
-        for format in inputFormats {
-            let formatter = DateFormatter()
-            formatter.locale = inputLocale
-            formatter.dateFormat = format
+    /// Normalize any extracted date string to ISO `yyyy-MM-dd` format.
+    /// Returns the original string unchanged if no known format is recognized.
+    func normalizeToISODate(_ dateStr: String) -> String {
+        let trimmed = dateStr.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        for formatter in OCRService.dateInputFormatters {
             if let date = formatter.date(from: trimmed) {
-                return outputFormatter.string(from: date)
+                return OCRService.isoOutputFormatter.string(from: date)
             }
         }
         return trimmed
     }
 
-    private func convertBuddhistToGregorian(_ dateString: String) -> String {
+    func convertBuddhistToGregorian(_ dateString: String) -> String {
         let monthMap = [
             "ม.ค.": "01", "ก.พ.": "02", "มี.ค.": "03", "เม.ย.": "04",
             "พ.ค.": "05", "มิ.ย.": "06", "ก.ค.": "07", "ส.ค.": "08",

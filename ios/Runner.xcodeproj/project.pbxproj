@@ -19,6 +19,14 @@
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		E97A3EC02E266F6D4000CD4D /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D8D102AB0CFCDCC828AEE969 /* Pods_RunnerTests.framework */; };
+		CCDD001122334455AA000001 /* SCBFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB001122334455AA000001 /* SCBFixtures.swift */; };
+		CCDD001122334455AA000002 /* KBankMakeFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB001122334455AA000002 /* KBankMakeFixtures.swift */; };
+		CCDD001122334455AA000003 /* KBankPlusFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB001122334455AA000003 /* KBankPlusFixtures.swift */; };
+		CCDD001122334455AA000004 /* DimeFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB001122334455AA000004 /* DimeFixtures.swift */; };
+		CCDD001122334455AA000005 /* OCRExtractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB001122334455AA000005 /* OCRExtractionTests.swift */; };
+		CCDD001122334455AA000006 /* BuddhistCalendarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB001122334455AA000006 /* BuddhistCalendarTests.swift */; };
+		CCDD001122334455AA000007 /* BuildSlipResultTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB001122334455AA000007 /* BuildSlipResultTests.swift */; };
+		CCDD001122334455AA000008 /* OCRImageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB001122334455AA000008 /* OCRImageTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -71,6 +79,14 @@
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		D6352B9F2354334F1EE2ACE4 /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
 		D8D102AB0CFCDCC828AEE969 /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		AABB001122334455AA000001 /* SCBFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SCBFixtures.swift; sourceTree = "<group>"; };
+		AABB001122334455AA000002 /* KBankMakeFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBankMakeFixtures.swift; sourceTree = "<group>"; };
+		AABB001122334455AA000003 /* KBankPlusFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBankPlusFixtures.swift; sourceTree = "<group>"; };
+		AABB001122334455AA000004 /* DimeFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DimeFixtures.swift; sourceTree = "<group>"; };
+		AABB001122334455AA000005 /* OCRExtractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRExtractionTests.swift; sourceTree = "<group>"; };
+		AABB001122334455AA000006 /* BuddhistCalendarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddhistCalendarTests.swift; sourceTree = "<group>"; };
+		AABB001122334455AA000007 /* BuildSlipResultTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildSlipResultTests.swift; sourceTree = "<group>"; };
+		AABB001122334455AA000008 /* OCRImageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRImageTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -93,10 +109,26 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		AABB001122334455AA000009 /* Fixtures */ = {
+			isa = PBXGroup;
+			children = (
+				AABB001122334455AA000001 /* SCBFixtures.swift */,
+				AABB001122334455AA000002 /* KBankMakeFixtures.swift */,
+				AABB001122334455AA000003 /* KBankPlusFixtures.swift */,
+				AABB001122334455AA000004 /* DimeFixtures.swift */,
+			);
+			path = Fixtures;
+			sourceTree = "<group>";
+		};
 		331C8082294A63A400263BE5 /* RunnerTests */ = {
 			isa = PBXGroup;
 			children = (
 				331C807B294A618700263BE5 /* RunnerTests.swift */,
+				AABB001122334455AA000005 /* OCRExtractionTests.swift */,
+				AABB001122334455AA000006 /* BuddhistCalendarTests.swift */,
+				AABB001122334455AA000007 /* BuildSlipResultTests.swift */,
+				AABB001122334455AA000008 /* OCRImageTests.swift */,
+				AABB001122334455AA000009 /* Fixtures */,
 			);
 			path = RunnerTests;
 			sourceTree = "<group>";
@@ -396,6 +428,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */,
+				CCDD001122334455AA000001 /* SCBFixtures.swift in Sources */,
+				CCDD001122334455AA000002 /* KBankMakeFixtures.swift in Sources */,
+				CCDD001122334455AA000003 /* KBankPlusFixtures.swift in Sources */,
+				CCDD001122334455AA000004 /* DimeFixtures.swift in Sources */,
+				CCDD001122334455AA000005 /* OCRExtractionTests.swift in Sources */,
+				CCDD001122334455AA000006 /* BuddhistCalendarTests.swift in Sources */,
+				CCDD001122334455AA000007 /* BuildSlipResultTests.swift in Sources */,
+				CCDD001122334455AA000008 /* OCRImageTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -524,6 +564,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.slipScanner.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -542,6 +583,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.slipScanner.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -558,6 +600,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.slipScanner.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";

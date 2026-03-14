@@ -38,9 +38,10 @@ Generated files (do not edit manually):
 ### Data Flow
 
 ```
-iOS Photos → scanAllPhotos() → DispatchQueue.global → OperationQueue (max 6)
-  → VisionKit OCR (accurate, th-TH + en-US) → RegexPatterns extraction
-  → buildSlipResult() → PlatformService (streams) → ScanningProvider
+iOS Photos → scanAllPhotos(processedAssetIds) → DispatchQueue.global → OperationQueue (max 6)
+  → skip already-processed assetIds → VisionKit OCR (accurate, th-TH + en-US)
+  → RegexPatterns extraction → buildSlipResult() → PlatformService (streams)
+  → ScanningProvider._insertBatch() [immediate, no accumulation]
   → DatabaseService.insertPaymentSlipsBatch()
   → ExtractionNotifier.notifyNewSlips() [event-driven]
   → ExtractionQueue._processingLoop()
@@ -64,7 +65,7 @@ Type-safe routing with `@RoutePage` annotations. Routes defined in `lib/router/a
 
 ### Platform Channels
 
-- `com.example.slip_scanner/vision` — OCR operations (scanAllPhotos, cancelScanning, scanPaymentSlip, deleteSlipImage)
+- `com.example.slip_scanner/vision` — OCR operations (scanAllPhotos, cancelScanning, scanPaymentSlip, deleteSlipImage, loadImageFromAsset)
 - `com.example.slip_scanner/progress` — Real-time callbacks (onProgress, onPartialResults) via `DispatchQueue.main.async`
 
 ### On-Device AI Pipeline (CactusLM + RAG)
@@ -73,24 +74,24 @@ Type-safe routing with `@RoutePage` annotations. Routes defined in `lib/router/a
 
 **ExtractionService**: Extracts structured data (recipientName, notes, category) from OCR text via LLM. Fixed categories: food, transport, utilities, shopping, transfer, entertainment, health, education, other.
 
-**ExtractionQueue** (provider): Event-driven background processing via `ExtractionNotifier` stream (no polling). Priority: extraction > RAG indexing. Pauses when user enters chat screen to avoid lock contention, resumes on exit.
+**ExtractionQueue** (provider): Event-driven background processing via `ExtractionNotifier` stream (no polling). Priority: extraction > RAG indexing. Uses ref-counted pause/resume (`_pauseCount`): `pauseExtraction()` increments, `resumeExtraction()` decrements, extraction resumes when count reaches zero. ChatScreen pauses on entry and resumes on exit to avoid LLM lock contention. Failed extractions increment `retryCount`; slips with `retryCount >= 3` are permanently skipped.
 
 **RAGQueueService** (singleton): Fire-and-forget indexing — doesn't block extraction if RAG fails. Indexes rich documents (amount, date, recipient, notes, category, original text).
 
-**ChatProvider**: Builds system prompt with expense stats + RAG context (top 5 relevant records), streams LLM completion.
+**ChatProvider**: Builds system prompt with expense stats + RAG context (top 5 relevant records), streams LLM completion. UI updates are batched every 100ms (not per-token) via `StringBuffer`.
 
-### iOS Native Implementation (AppDelegate.swift)
+### iOS Native Implementation
 
-- **OCR**: Vision Framework, `.accurate` level, `th-TH` + `en-US` languages
-- **Concurrency**: `OperationQueue` with max `min(ProcessorCount, 6)` concurrent ops. Thread-safe counters via `NSLock`
-- **Shared helpers**: `recognizeText(from:)` → `buildSlipResult(text:amount:date:identifier:)` — both OCR paths (`processImageForPaymentSlip` batch and `scanPaymentSlip` single) use these
-- **Name extraction**: `extractName(from:labelPatterns:anchorMatchIndex:)` — unified 3-tier strategy (label patterns → K Plus anchor → Make anchor), parameterized by match index (0=sender, 1=receiver)
-- **RegexPatterns struct**: 40+ pre-compiled `NSRegularExpression` patterns for SCB, KBank (Make/K Plus), Dime formats
-- **Buddhist Calendar**: Auto BE→Gregorian conversion (2567→2024, or short form 67→2024)
+Split into three files under `ios/Runner/`:
 
-**Critical (Flutter 3.35+)**: All blocking native work must use `DispatchQueue.global()`, NOT `Task{}` which inherits MainActor context on merged threads.
+- **`AppDelegate.swift`** — Platform channel setup and method routing only. Delegates all work to `PhotoScanner`.
+- **`RegexPatterns.swift`** — 40+ pre-compiled `NSRegularExpression` patterns (compiled once at launch) for SCB, KBank (Make/K Plus), Dime formats. Includes amount, date, Thai month, Buddhist year, reference ID, sender/receiver name, account number, and date-time patterns.
+- **`OCRService.swift`** — Vision Framework OCR (`recognizeText`), structured field extraction (`buildSlipResult`), `normalizeToISODate` for consistent date output, and Buddhist calendar conversion.
+- **`PhotoScanner.swift`** — Bulk photo library scanning with `OperationQueue` (max `min(ProcessorCount, 6)` concurrent ops), single-image scanning, asset operations, `loadImageFromAsset` for PHAsset byte loading, iCloud skip detection, and progress throttling (every 50 images or 200ms).
 
-### Database (SQLite, v4)
+**Critical (Flutter 3.35+)**: All blocking native work must use `DispatchQueue.global()`, NOT `Task{}` which inherits MainActor context on merged threads. `FlutterResult` must be called on the main thread.
+
+### Database (SQLite, v5)
 
 ```
 payment_slips:
@@ -98,22 +99,56 @@ payment_slips:
   senderName, referenceId, senderAccount, receiverAccount, transactionTime,  -- OCR (v4)
   recipientName, notes, category,                                            -- LLM (v3)
   llmProcessingStatus ('pending'|'processing'|'completed'|'failed'),         -- LLM (v3)
-  ragIndexed (0|1), updatedAt                                                -- LLM (v3)
+  ragIndexed (0|1), updatedAt,                                               -- LLM (v3)
+  retryCount (default 0)                                                     -- v5
 
 Indexes: idx_assetId (dedup), idx_llm_status (queue), idx_referenceId (lookup)
 ```
 
-Batch inserts use transactions with assetId deduplication. New inserts trigger `ExtractionNotifier.notifyNewSlips()`.
+Batch inserts use transactions with assetId deduplication. New inserts trigger `ExtractionNotifier.notifyNewSlips()`. Database init is guarded by a `Completer` to prevent concurrent initialization races.
 
 ## Key Conventions
 
-- iOS returns empty strings `""` for missing optional fields (not nil) — Flutter side uses `_nonEmpty()` helper to convert to null
+- iOS returns empty strings `""` for missing optional fields (not nil) — Flutter side uses `nonEmpty()` helper to convert to null
 - `convertSlipsInIsolate` must be a top-level function (required for `compute()` isolate compatibility)
 - OCR receiver name pre-fills `recipientName`; LLM extraction overwrites if non-null
 - Multi-bank regex patterns: arrays tried in priority order, first match wins
 - KBank slips use positional extraction (no labels) — match index 0 = sender, index 1 = receiver
 - Currency symbol is `฿` (Thai Baht), not `$`
 - Shared helpers in `lib/utils/` (dialogs, formatters) and `lib/widgets/` (hero_card, slip_list_tile)
+- Partial scan results are inserted to DB immediately per-batch (no state accumulation); `_pendingInserts` tracks in-flight futures so `_handleScanComplete` can `Future.wait` before finishing
+- Already-processed assetIds are fetched from DB at scan start and passed to iOS to skip re-scanning
+
+## Testing
+
+### Dart Tests
+
+```bash
+flutter test                                        # Run all Dart tests
+flutter test test/scanning_conversion_test.dart      # Run a specific test file
+```
+
+### iOS XCTests (OCR & Regex Extraction)
+
+Requires an iOS Simulator. Tests the native OCR extraction pipeline (amounts, dates, names, accounts, reference IDs, Buddhist calendar conversion, `buildSlipResult` assembly) across all bank formats.
+
+```bash
+cd ios && xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -only-testing:RunnerTests/OCRExtractionTests \
+  -only-testing:RunnerTests/BuddhistCalendarTests \
+  -only-testing:RunnerTests/BuildSlipResultTests
+```
+
+### Adding a Regression Test
+
+When a slip doesn't parse correctly:
+
+1. Get the OCR text (from `extractedText` in the database or scanner log)
+2. Add it as a new static constant in the appropriate bank fixture file in `ios/RunnerTests/Fixtures/`
+3. Add expected values to the `Expected` struct
+4. Write a test assertion in the relevant test file
+5. Fix the regex/extraction logic, then run all tests to verify no regressions
 
 ## Linting
 
