@@ -14,6 +14,7 @@ part 'extraction_provider.g.dart';
 class ExtractionQueue extends _$ExtractionQueue {
   StreamSubscription<List<int>>? _newSlipsSubscription;
   bool _isRunning = false;
+  int _pauseCount = 0;
   Completer<void>? _workAvailable;
 
   @override
@@ -66,11 +67,32 @@ class ExtractionQueue extends _$ExtractionQueue {
   /// Stop background processing
   void stopBackgroundProcessing() {
     _isRunning = false;
+    _pauseCount = 0;
     _newSlipsSubscription?.cancel();
     _newSlipsSubscription = null;
     _workAvailable?.complete();
     state = state.copyWith(isProcessing: false, currentSlipId: null);
     debugPrint('🛑 Background extraction stopped');
+  }
+
+  /// Pause extraction (ref-counted). Extraction resumes when all callers
+  /// call resumeExtraction(). Safe to call multiple times — each pause()
+  /// must be paired with exactly one resume().
+  void pauseExtraction() {
+    _pauseCount++;
+    debugPrint('⏸ Extraction paused (count: $_pauseCount)');
+  }
+
+  /// Resume extraction. Decrements pause ref-count; extraction resumes
+  /// when count reaches zero. Idempotent if called without a prior pause.
+  void resumeExtraction() {
+    if (_pauseCount > 0) {
+      _pauseCount--;
+      if (_pauseCount == 0) {
+        _signalWorkAvailable();
+        debugPrint('▶️ Extraction resumed');
+      }
+    }
   }
 
   /// Signal that work is available (wakes up the processing loop)
@@ -84,6 +106,16 @@ class ExtractionQueue extends _$ExtractionQueue {
     debugPrint('🔄 Processing loop started');
 
     while (_isRunning) {
+      // Yield while paused (e.g., ChatScreen is active to avoid lock contention)
+      if (_pauseCount > 0) {
+        _workAvailable = Completer<void>();
+        await Future.any([
+          _workAvailable!.future,
+          Future.delayed(const Duration(milliseconds: 500)),
+        ]);
+        continue;
+      }
+
       final cactusState = ref.read(cactusProvider);
       if (!cactusState.isModelLoaded) {
         // Wait for model to load
@@ -106,7 +138,7 @@ class ExtractionQueue extends _$ExtractionQueue {
           _workAvailable = Completer<void>();
           await Future.any([
             _workAvailable!.future,
-            Future.delayed(const Duration(seconds: 1)),
+            Future.delayed(const Duration(seconds: 30)),
           ]);
         }
       }
@@ -164,6 +196,7 @@ class ExtractionQueue extends _$ExtractionQueue {
 
       // Mark as failed if we have a current slip
       if (state.currentSlipId != null) {
+        await DatabaseService.incrementRetryCount(state.currentSlipId!);
         await DatabaseService.updateLLMStatus(state.currentSlipId!, 'failed');
         final failed = await DatabaseService.countSlipsWithStatus('failed');
         final pending = await DatabaseService.countSlipsWithStatus('pending');
