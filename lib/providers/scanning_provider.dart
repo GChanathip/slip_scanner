@@ -107,6 +107,7 @@ DateTime? _parseThaiDateInIsolate(String dateStr) {
 class Scanning extends _$Scanning {
   StreamSubscription? _progressSubscription;
   StreamSubscription? _partialResultsSubscription;
+  final List<Future<void>> _pendingInserts = [];
 
   @override
   ScanningState build() {
@@ -200,18 +201,18 @@ class Scanning extends _$Scanning {
     );
   }
 
-  /// Listen to partial results from platform
+  /// Listen to partial results from platform.
+  /// Each batch is immediately converted and inserted to DB — no state accumulation.
   void _listenToPartialResults() {
     _partialResultsSubscription?.cancel();
     _partialResultsSubscription = PlatformService.getPartialResultsStream().listen(
       (partialData) {
         final slips = partialData['slips'] as List<dynamic>? ?? [];
         if (slips.isNotEmpty) {
-          final accumulated = List<Map<String, dynamic>>.from(state.accumulatedSlips);
-          for (final slip in slips) {
-            accumulated.add(Map<String, dynamic>.from(slip));
-          }
-          state = state.copyWith(accumulatedSlips: accumulated);
+          final raw = slips.map((s) => Map<String, dynamic>.from(s)).toList();
+          final future = _insertBatch(raw);
+          _pendingInserts.add(future);
+          future.whenComplete(() => _pendingInserts.remove(future));
         }
       },
       onError: (error) {
@@ -220,15 +221,18 @@ class Scanning extends _$Scanning {
     );
   }
 
-  /// Handle scan completion - called when progress stream sends isComplete: true
+  Future<void> _insertBatch(List<Map<String, dynamic>> raw) async {
+    final paymentSlips = await compute(convertSlipsInIsolate, raw);
+    await DatabaseService.insertPaymentSlipsBatch(paymentSlips);
+  }
+
+  /// Handle scan completion — wait for all in-flight batch inserts, then finish.
   Future<void> _handleScanComplete() async {
     try {
-      // Process accumulated slips from partial results in background isolate
-      if (state.accumulatedSlips.isNotEmpty) {
-        final paymentSlips = await compute(convertSlipsInIsolate, state.accumulatedSlips);
-        await DatabaseService.insertPaymentSlipsBatch(paymentSlips);
+      if (_pendingInserts.isNotEmpty) {
+        await Future.wait(List.of(_pendingInserts));
       }
-
+      _pendingInserts.clear();
       state = state.copyWith(isScanning: false);
     } catch (e) {
       state = state.copyWith(error: 'Failed to save results: $e', isScanning: false);
@@ -239,6 +243,7 @@ class Scanning extends _$Scanning {
   void reset() {
     _progressSubscription?.cancel();
     _partialResultsSubscription?.cancel();
+    _pendingInserts.clear();
     state = const ScanningState();
   }
 }
