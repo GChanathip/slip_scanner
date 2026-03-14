@@ -2,7 +2,7 @@ import 'package:cactus/cactus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../services/cactus_service.dart';
-import '../services/database_service.dart';
+import '../services/chat_query_service.dart';
 import 'chat_state.dart';
 
 part 'chat_provider.g.dart';
@@ -46,10 +46,18 @@ class Chat extends _$Chat {
       }
 
       // Get summary stats for date range
-      final stats = await _getStatsForDateRange();
+      final stats = await ChatQueryService.getStatsForDateRange(
+        startDate: state.startDate,
+        endDate: state.endDate,
+      );
 
       // Build system prompt with context
-      final systemPrompt = _buildSystemPrompt(stats, ragContext);
+      final systemPrompt = ChatQueryService.buildSystemPrompt(
+        stats: stats,
+        ragContext: ragContext,
+        startDate: state.startDate,
+        endDate: state.endDate,
+      );
 
       // Create message list for LLM
       final llmMessages = [
@@ -102,73 +110,6 @@ class Chat extends _$Chat {
         timestamp: DateTime.now(),
       );
       state = state.copyWith(messages: [...state.messages, errorMsg]);
-    }
-  }
-
-  /// Build system prompt with context
-  String _buildSystemPrompt(String stats, String ragContext) {
-    final dateRangeStr = state.startDate != null && state.endDate != null
-        ? '${state.startDate!.toIso8601String().split('T')[0]} to ${state.endDate!.toIso8601String().split('T')[0]}'
-        : 'all time';
-
-    return '''You are a helpful expense tracking assistant for a Thai banking slip scanner app.
-You help users understand their spending patterns and provide financial insights.
-
-Current date range filter: $dateRangeStr
-
-$stats
-
-${ragContext.isNotEmpty ? 'Relevant expense records:\n$ragContext' : ''}
-
-Guidelines:
-- Be concise and helpful
-- Format currency amounts clearly (e.g., 1,234.56 baht)
-- Provide actionable insights when appropriate
-- If asked about specific transactions, reference the data above
-- For budget advice, be practical and non-judgmental
-- Answer in the same language the user uses (Thai or English)''';
-  }
-
-  /// Get summary statistics for the selected date range
-  Future<String> _getStatsForDateRange() async {
-    try {
-      final slips = await DatabaseService.getPaymentSlipsInRange(
-        state.startDate ?? DateTime(2000),
-        state.endDate ?? DateTime.now(),
-      );
-
-      if (slips.isEmpty) {
-        return 'Summary: No expense records found for this period.';
-      }
-
-      final total = slips.fold<double>(0, (sum, s) => sum + s.amount);
-      final count = slips.length;
-      final avg = count > 0 ? total / count : 0;
-
-      // Group by category
-      final byCategory = <String, double>{};
-      for (final slip in slips) {
-        final cat = slip.category ?? 'uncategorized';
-        byCategory[cat] = (byCategory[cat] ?? 0) + slip.amount;
-      }
-
-      // Sort categories by amount
-      final sortedCategories = byCategory.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
-
-      final categoryStr = sortedCategories
-          .take(5)
-          .map((e) => '${e.key}: ${e.value.toStringAsFixed(2)} baht')
-          .join(', ');
-
-      return '''Summary statistics for this period:
-- Total spending: ${total.toStringAsFixed(2)} baht
-- Transaction count: $count
-- Average transaction: ${avg.toStringAsFixed(2)} baht
-- Top categories: $categoryStr''';
-    } catch (e) {
-      debugPrint('Error getting stats: $e');
-      return 'Summary: Unable to load statistics.';
     }
   }
 

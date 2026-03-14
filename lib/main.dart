@@ -1,8 +1,11 @@
+import 'dart:io' show Platform;
+
+import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
-import 'router/app_router.dart';
 import 'package:cactus/cactus.dart';
+import 'router/app_router.dart';
 
 void main() {
   CactusConfig.setTelemetryToken('f048d96d-ab22-41ed-b5c1-8226b3300315');
@@ -38,7 +41,11 @@ class _MyAppState extends State<MyApp> {
           child: FToaster(child: child!),
         );
       },
-      routerConfig: _appRouter.config(),
+      routerConfig: _appRouter.config(
+        deepLinkBuilder: (_) => Platform.isMacOS
+            ? DeepLink.single(const ServerDashboardRoute())
+            : DeepLink.defaultPath,
+      ),
     );
   }
 }

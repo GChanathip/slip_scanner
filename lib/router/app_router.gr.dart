@@ -164,6 +164,22 @@ class ScanningProgressRoute extends PageRouteInfo<void> {
 }
 
 /// generated route for
+/// [ServerDashboardScreen]
+class ServerDashboardRoute extends PageRouteInfo<void> {
+  const ServerDashboardRoute({List<PageRouteInfo>? children})
+    : super(ServerDashboardRoute.name, initialChildren: children);
+
+  static const String name = 'ServerDashboardRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const ServerDashboardScreen();
+    },
+  );
+}
+
+/// generated route for
 /// [SettingsScreen]
 class SettingsRoute extends PageRouteInfo<void> {
   const SettingsRoute({List<PageRouteInfo>? children})
