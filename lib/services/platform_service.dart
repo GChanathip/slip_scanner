@@ -10,10 +10,13 @@ class PlatformService {
 
   /// Start scanning - returns immediately, does NOT wait for completion
   /// Listen to getProgressStream() for updates and completion (isComplete: true)
-  static Future<void> startScanning() async {
+  /// Pass [processedAssetIds] to skip already-scanned photos on iOS.
+  static Future<void> startScanning({List<String> processedAssetIds = const []}) async {
     try {
       // Fire and forget - iOS returns immediately with "started" status
-      await _channel.invokeMethod('scanAllPhotos');
+      await _channel.invokeMethod('scanAllPhotos', {
+        'processedAssetIds': processedAssetIds,
+      });
     } on PlatformException catch (e) {
       throw Exception('Failed to start scanning: ${e.message}');
     }

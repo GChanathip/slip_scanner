@@ -133,9 +133,12 @@ class Scanning extends _$Scanning {
     await Future.delayed(const Duration(milliseconds: 100));
 
     try {
+      // Fetch already-processed asset IDs so iOS can skip them
+      final processedIds = await DatabaseService.getProcessedAssetIds();
+
       // Fire and forget - don't await! iOS returns immediately
       // Completion is detected via progress stream (isComplete: true)
-      await PlatformService.startScanning();
+      await PlatformService.startScanning(processedAssetIds: processedIds);
     } catch (e) {
       state = state.copyWith(error: e.toString(), isScanning: false);
     }

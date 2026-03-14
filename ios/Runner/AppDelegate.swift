@@ -165,7 +165,12 @@ private struct RegexPatterns {
         visionChannel?.setMethodCallHandler { [weak self] (call, result) in
             switch call.method {
             case "scanAllPhotos":
-                self?.scanAllPhotos(result: result)
+                var processedIds: Set<String> = []
+                if let args = call.arguments as? [String: Any],
+                   let ids = args["processedAssetIds"] as? [String] {
+                    processedIds = Set(ids)
+                }
+                self?.scanAllPhotos(processedAssetIds: processedIds, result: result)
             case "cancelScanning":
                 self?.cancelScanning()
                 result(true)
@@ -195,7 +200,7 @@ private struct RegexPatterns {
     }
 
     // MARK: - Photo Scanning
-    private func scanAllPhotos(result: @escaping FlutterResult) {
+    private func scanAllPhotos(processedAssetIds: Set<String>, result: @escaping FlutterResult) {
         cancelScanning()
         isCancelled = false
 
@@ -206,7 +211,7 @@ private struct RegexPatterns {
                 PHPhotoLibrary.requestAuthorization { [weak self] newStatus in
                     DispatchQueue.main.async {
                         if newStatus == .authorized || newStatus == .limited {
-                            self?.startBackgroundScanning(result: result)
+                            self?.startBackgroundScanning(processedAssetIds: processedAssetIds, result: result)
                         } else {
                             result(FlutterError(code: "PERMISSION_DENIED", message: "Photo library access denied", details: nil))
                         }
@@ -218,21 +223,21 @@ private struct RegexPatterns {
             return
         }
 
-        startBackgroundScanning(result: result)
+        startBackgroundScanning(processedAssetIds: processedAssetIds, result: result)
     }
 
-    private func startBackgroundScanning(result: @escaping FlutterResult) {
+    private func startBackgroundScanning(processedAssetIds: Set<String>, result: @escaping FlutterResult) {
         // Return immediately - don't block platform/UI thread
         result(["status": "started", "message": "Scanning started"])
 
         // Run on background thread (NOT Task{} which inherits MainActor)
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.performStreamingScanning()
+            self?.performStreamingScanning(processedAssetIds: processedAssetIds)
         }
     }
 
     // MARK: - Streaming Scan (real-time progress, NO chunking, NO throttling)
-    private func performStreamingScanning() {
+    private func performStreamingScanning(processedAssetIds: Set<String>) {
         let fetchOptions = PHFetchOptions()
         fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
         fetchOptions.predicate = NSPredicate(format: "mediaType == %d", PHAssetMediaType.image.rawValue)
@@ -268,8 +273,25 @@ private struct RegexPatterns {
         for i in 0..<totalCount {
             guard !isCancelled else { break }
 
-            completionGroup.enter()
             let asset = assets.object(at: i)
+
+            // Skip assets already in the database — no OCR needed
+            if processedAssetIds.contains(asset.localIdentifier) {
+                counterLock.lock()
+                processedCount += 1
+                let currentProcessed = processedCount
+                let currentSlipsFound = slipsFoundCount
+                counterLock.unlock()
+                sendProgressFromBackground(
+                    total: totalCount,
+                    processed: currentProcessed,
+                    slipsFound: currentSlipsFound,
+                    isComplete: false
+                )
+                continue
+            }
+
+            completionGroup.enter()
 
             operationQueue.addOperation { [weak self] in
                 defer { completionGroup.leave() }
