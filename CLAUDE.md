@@ -16,8 +16,9 @@ Flutter iOS app that scans payment slips from device photos using Apple Vision F
 flutter pub get              # Install dependencies
 flutter run                  # Run on iOS simulator/device
 flutter build ios            # Build for iOS release
-flutter test                 # Run tests
-flutter analyze              # Analyze code (includes linting)
+flutter test                 # Run all tests
+flutter test test/foo_test.dart          # Run a single test file
+flutter analyze              # Analyze code (includes riverpod_lint)
 cd ios && pod install        # Install iOS dependencies
 dart run build_runner build --delete-conflicting-outputs  # Generate code
 dart run build_runner watch  # Watch mode for code generation
@@ -50,7 +51,7 @@ iOS Photos → scanAllPhotos() → DispatchQueue.global → OperationQueue (max 
 
 ### UI (ForUI)
 
-Design system: `forui` package (shadcn/ui-inspired). Components: `FButton`, `FCard`, `FAlert`, `FDialog`, `FToast`, `FScaffold`, `FHeader`. Theming via `FThemes.zinc` in `main.dart`. See [docs/FORUI_GUIDE.md](docs/FORUI_GUIDE.md) for usage guide.
+Design system: `forui` package (shadcn/ui-inspired). Components: `FButton`, `FCard`, `FAlert`, `FDialog`, `FToast`, `FScaffold`, `FHeader`. Theming via `FThemes.zinc` in `main.dart` (light/dark with auto-detection). See [docs/FORUI_GUIDE.md](docs/FORUI_GUIDE.md) for usage guide and [docs/FORUI_MIGRATION_SUMMARY.md](docs/FORUI_MIGRATION_SUMMARY.md) for migration notes.
 
 ### State Management (Riverpod + Freezed)
 
@@ -114,8 +115,12 @@ Batch inserts use transactions with assetId deduplication. New inserts trigger `
 - Currency symbol is `฿` (Thai Baht), not `$`
 - Shared helpers in `lib/utils/` (dialogs, formatters) and `lib/widgets/` (hero_card, slip_list_tile)
 
+## Linting
+
+Uses `flutter_lints` with `riverpod_lint` plugin enabled (see `analysis_options.yaml`). Run `flutter analyze` to check.
+
 ## Requirements
 
-- **Flutter SDK**: 3.38.x+
+- **Flutter SDK**: 3.38.x+ (Dart SDK ^3.10.4)
 - **iOS Deployment Target**: 15.6+
 - **Xcode**: Latest for iOS development
