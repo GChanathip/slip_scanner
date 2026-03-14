@@ -8,6 +8,7 @@ import '../models/payment_slip.dart';
 import '../services/database_service.dart';
 import '../services/platform_service.dart';
 import '../utils/dialogs.dart';
+import '../utils/formatters.dart';
 
 @RoutePage()
 class SlipDetailScreen extends StatefulWidget {
@@ -113,7 +114,6 @@ class _SlipDetailScreenState extends State<SlipDetailScreen> {
       header: FHeader.nested(
         title: const Text('Slip Details'),
         prefixes: [FHeaderAction.back(onPress: () => context.router.maybePop())],
-        suffixes: [FHeaderAction(icon: const Icon(FIcons.trash2), onPress: () => _deleteSlip(context))],
       ),
       child: ListView(
         padding: const EdgeInsets.all(16.0),
@@ -122,7 +122,7 @@ class _SlipDetailScreenState extends State<SlipDetailScreen> {
           FCard(
             title: const Text('Amount'),
             subtitle: Text(
-              '฿${slip.amount.toStringAsFixed(2)}',
+              formatCurrency(slip.amount),
               style: theme.typography.xl4.copyWith(fontWeight: FontWeight.bold, color: theme.colors.primary),
             ),
           ),
@@ -160,6 +160,43 @@ class _SlipDetailScreenState extends State<SlipDetailScreen> {
               child: slip.receiverAccount != null
                   ? Text('Account: xxx-xxx${slip.receiverAccount}', style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground))
                   : null,
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // Category
+          if (slip.category != null) ...[
+            FCard(
+              title: const Text('Category'),
+              subtitle: Text(formatCategory(slip.category!), style: theme.typography.lg),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // Notes
+          if (slip.notes != null) ...[
+            FCard(
+              title: const Text('Notes'),
+              subtitle: Text(slip.notes!, style: theme.typography.base),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // Processing Status
+          if (slip.llmProcessingStatus != 'completed') ...[
+            FCard(
+              title: const Text('AI Processing'),
+              subtitle: Text(
+                switch (slip.llmProcessingStatus) {
+                  'pending' => 'Pending analysis',
+                  'processing' => 'Analyzing...',
+                  'failed' => 'Analysis failed (retry ${slip.retryCount}/3)',
+                  _ => slip.llmProcessingStatus,
+                },
+                style: theme.typography.sm.copyWith(
+                  color: slip.llmProcessingStatus == 'failed' ? theme.colors.destructive : theme.colors.mutedForeground,
+                ),
+              ),
             ),
             const SizedBox(height: 16),
           ],
@@ -202,6 +239,17 @@ class _SlipDetailScreenState extends State<SlipDetailScreen> {
             title: const Text('Scanned on'),
             subtitle: Text(DateFormat('MMM dd, yyyy hh:mm a').format(slip.createdAt), style: theme.typography.base),
           ),
+
+          const SizedBox(height: 24),
+
+          // Delete Button (at bottom)
+          FButton(
+            style: FButtonStyle.destructive(),
+            onPress: () => _deleteSlip(context),
+            prefix: Icon(FIcons.trash2, size: 16),
+            child: const Text('Delete Slip'),
+          ),
+          const SizedBox(height: 16),
         ],
       ),
     );

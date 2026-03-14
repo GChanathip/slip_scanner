@@ -113,29 +113,37 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
                   padding: const EdgeInsets.all(16),
                   children: [
                     // Date Range Picker
-                    GestureDetector(
-                      onTap: _selectDateRange,
-                      child: FCard.raw(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            children: [
-                              Icon(FIcons.calendar, color: theme.colors.primary),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Date Range', style: theme.typography.sm),
-                                    Text(
-                                      _formatDateRangeLocal(),
-                                      style: theme.typography.base.copyWith(fontWeight: FontWeight.w500),
+                    Semantics(
+                      button: true,
+                      label: 'Select date range',
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: _selectDateRange,
+                          borderRadius: theme.style.borderRadius,
+                          child: FCard.raw(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(
+                                children: [
+                                  Icon(FIcons.calendar, color: theme.colors.primary),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('Date Range', style: theme.typography.sm),
+                                        Text(
+                                          _formatDateRangeLocal(),
+                                          style: theme.typography.base.copyWith(fontWeight: FontWeight.w500),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                  Icon(FIcons.chevronRight, color: theme.colors.mutedForeground),
+                                ],
                               ),
-                              Icon(FIcons.chevronRight, color: theme.colors.mutedForeground),
-                            ],
+                            ),
                           ),
                         ),
                       ),
@@ -162,7 +170,7 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
                             child: _buildStatCard(
                               theme,
                               'Total',
-                              '${analysisState.totalSpending.toStringAsFixed(0)} ฿',
+                              formatCurrencyCompact(analysisState.totalSpending),
                               FIcons.wallet,
                             ),
                           ),
@@ -184,7 +192,7 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
                             child: _buildStatCard(
                               theme,
                               'Average',
-                              '${analysisState.averageTransaction.toStringAsFixed(0)} ฿',
+                              formatCurrencyCompact(analysisState.averageTransaction),
                               FIcons.calculator,
                             ),
                           ),
@@ -242,20 +250,16 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
                     ],
                   ],
                 ),
-          // Ask AI Floating Action Button
+          // Ask AI Button
           Positioned(
             right: 16,
             bottom: 16,
-            child: FloatingActionButton.extended(
-              onPressed: cactusState.isModelLoaded
+            child: FButton(
+              onPress: cactusState.isModelLoaded
                   ? () => context.router.push(ChatRoute(startDate: _startDate, endDate: _endDate))
                   : null,
-              icon: const Icon(FIcons.messageCircle),
-              label: const Text('Ask AI'),
-              backgroundColor: cactusState.isModelLoaded ? theme.colors.primary : theme.colors.muted,
-              foregroundColor: cactusState.isModelLoaded
-                  ? theme.colors.primaryForeground
-                  : theme.colors.mutedForeground,
+              prefix: Icon(FIcons.messageCircle, size: 18),
+              child: const Text('Ask AI'),
             ),
           ),
         ],
@@ -305,7 +309,7 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
                 ],
               ),
               Text(
-                '${amount.toStringAsFixed(0)} ฿',
+                formatCurrencyCompact(amount),
                 style: theme.typography.base.copyWith(fontWeight: FontWeight.w500),
               ),
             ],

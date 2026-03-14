@@ -7,6 +7,7 @@ import '../router/app_router.dart';
 import '../services/database_service.dart';
 import '../services/platform_service.dart';
 import '../utils/dialogs.dart';
+import '../utils/formatters.dart';
 import '../widgets/slip_list_tile.dart';
 
 @RoutePage()
@@ -41,9 +42,7 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
     });
   }
 
-  Future<void> _deleteSlip(PaymentSlip slip) async {
-    if (!await showDeleteConfirmation(context)) return;
-
+  Future<void> _deleteSlipWithoutConfirm(PaymentSlip slip) async {
     try {
       await PlatformService.deleteSlipImage(slip.imagePath);
       await DatabaseService.deletePaymentSlip(slip.id!);
@@ -90,7 +89,7 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
                       Text('Total Spending', style: theme.typography.lg),
                       const SizedBox(height: 8),
                       Text(
-                        '฿${_totalAmount.toStringAsFixed(2)}',
+                        formatCurrency(_totalAmount),
                         style: theme.typography.xl4.copyWith(fontWeight: FontWeight.bold, color: theme.colors.primary),
                       ),
                       Text(
@@ -115,14 +114,24 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
                           itemCount: _slips.length,
                           itemBuilder: (context, index) {
                             final slip = _slips[index];
-                            return SlipListTile(
-                              slip: slip,
-                              onTap: () => context.router.push(SlipDetailRoute(slip: slip)).then((_) => _loadSlips()),
-                              trailing: FButton(
-                                style: FButtonStyle.destructive(),
-                                onPress: () => _deleteSlip(slip),
-                                prefix: Icon(FIcons.trash2, size: 16),
-                                child: const Text('Delete'),
+                            return Dismissible(
+                              key: ValueKey(slip.id),
+                              direction: DismissDirection.endToStart,
+                              confirmDismiss: (_) => showDeleteConfirmation(context),
+                              onDismissed: (_) => _deleteSlipWithoutConfirm(slip),
+                              background: Container(
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 20),
+                                margin: const EdgeInsets.only(bottom: 8),
+                                decoration: BoxDecoration(
+                                  color: theme.colors.destructive,
+                                  borderRadius: theme.style.borderRadius,
+                                ),
+                                child: Icon(FIcons.trash2, color: theme.colors.destructiveForeground),
+                              ),
+                              child: SlipListTile(
+                                slip: slip,
+                                onTap: () => context.router.push(SlipDetailRoute(slip: slip)).then((_) => _loadSlips()),
                               ),
                             );
                           },

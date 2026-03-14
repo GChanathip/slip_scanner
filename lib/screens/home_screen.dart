@@ -9,6 +9,7 @@ import '../router/app_router.dart';
 import '../services/database_service.dart';
 import '../providers/scanning_provider.dart';
 import '../providers/extraction_provider.dart';
+import '../utils/formatters.dart';
 import '../widgets/hero_card.dart';
 import '../widgets/slip_list_tile.dart';
 
@@ -193,7 +194,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     FCard(
                       title: const Text("This Month's Spending"),
                       subtitle: Text(
-                        '฿${currentMonthTotal.toStringAsFixed(2)}',
+                        formatCurrency(currentMonthTotal),
                         style: theme.typography.xl4.copyWith(color: theme.colors.primary, fontWeight: FontWeight.bold),
                       ),
                       child: Padding(
@@ -220,26 +221,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       final month = DateTime.parse('${entry.key}-01');
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8.0),
-                        child: GestureDetector(
-                          onTap: () {
-                            context.router.push(MonthlyViewRoute(month: month)).then((_) => _loadData());
-                          },
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: theme.colors.border),
-                              borderRadius: theme.style.borderRadius,
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(DateFormat('MMMM yyyy').format(month), style: theme.typography.base),
-                                Text(
-                                  '฿${entry.value.toStringAsFixed(2)}',
-                                  style: theme.typography.base.copyWith(fontWeight: FontWeight.bold),
-                                ),
-                              ],
+                        child: Material(
+                          color: theme.colors.background,
+                          shape: RoundedRectangleBorder(
+                            side: BorderSide(color: theme.colors.border),
+                            borderRadius: theme.style.borderRadius,
+                          ),
+                          child: InkWell(
+                            onTap: () {
+                              context.router.push(MonthlyViewRoute(month: month)).then((_) => _loadData());
+                            },
+                            borderRadius: theme.style.borderRadius,
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(DateFormat('MMMM yyyy').format(month), style: theme.typography.base),
+                                  Text(
+                                    formatCurrency(entry.value),
+                                    style: theme.typography.base.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
