@@ -22,7 +22,7 @@ Extract the following information and respond in JSON format only:
 {
   "recipientName": "recipient's name (who received the money) or null if not found",
   "notes": "any payment notes/memo/reference or null if not found",
-  "category": "one of: food, transport, utilities, shopping, transfer, entertainment, health, education, other"
+  "category": "one of: food, transport, utilities, shopping, transfer, entertainment, health, education, rent, subscriptions, groceries, personal_care, gifts, other"
 }
 
 Rules:
@@ -99,6 +99,11 @@ Rules:
       'entertainment',
       'health',
       'education',
+      'rent',
+      'subscriptions',
+      'groceries',
+      'personal_care',
+      'gifts',
       'other',
     ];
 

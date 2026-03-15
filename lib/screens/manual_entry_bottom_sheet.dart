@@ -19,6 +19,11 @@ const _categories = [
   'entertainment',
   'health',
   'education',
+  'rent',
+  'subscriptions',
+  'groceries',
+  'personal_care',
+  'gifts',
   'other',
 ];
 
@@ -31,6 +36,11 @@ const _categoryEmoji = {
   'entertainment': '🎬',
   'health': '💊',
   'education': '📚',
+  'rent': '🏠',
+  'subscriptions': '📱',
+  'groceries': '🛒',
+  'personal_care': '💆',
+  'gifts': '🎁',
   'other': '📋',
 };
 
@@ -43,6 +53,11 @@ const _categoryLabels = {
   'entertainment': 'Entertainment',
   'health': 'Health',
   'education': 'Education',
+  'rent': 'Rent',
+  'subscriptions': 'Subscriptions',
+  'groceries': 'Groceries',
+  'personal_care': 'Personal Care',
+  'gifts': 'Gifts',
   'other': 'Other',
 };
 

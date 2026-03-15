@@ -23,6 +23,11 @@ const _categoryIcons = <String, IconData>{
   'entertainment': FIcons.gamepad2,
   'health': FIcons.heart,
   'education': FIcons.graduationCap,
+  'rent': FIcons.house,
+  'subscriptions': FIcons.repeat,
+  'groceries': FIcons.shoppingCart,
+  'personal_care': FIcons.sparkles,
+  'gifts': FIcons.gift,
 };
 
 const _insightIcons = <String, IconData>{
