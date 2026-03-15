@@ -4,7 +4,7 @@ import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
-import 'package:slip_scanner/providers/budget_state.dart';
+import 'package:avers/providers/budget_state.dart';
 import '../providers/analysis_provider.dart';
 import '../providers/analysis_state.dart';
 import '../providers/budget_provider.dart';

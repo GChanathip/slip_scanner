@@ -28,7 +28,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'Payment Slip Scanner',
+      title: 'Avers',
       debugShowCheckedModeBanner: false,
       locale: const Locale('en', 'US'),
       localizationsDelegates: FLocalizations.localizationsDelegates,

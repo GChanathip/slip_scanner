@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:forui/forui.dart';
-import 'package:slip_scanner/models/suggestion_chip.dart' as model;
-import 'package:slip_scanner/widgets/suggestion_chips_bar.dart';
+import 'package:avers/models/suggestion_chip.dart' as model;
+import 'package:avers/widgets/suggestion_chips_bar.dart';
 
 /// Wraps a widget in the minimum forui + Material scaffolding needed for tests.
 Widget _testApp(Widget child) {

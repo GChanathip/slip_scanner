@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:slip_scanner/providers/budget_state.dart';
+import 'package:avers/providers/budget_state.dart';
 
 void main() {
   group('BudgetAlert', () {
