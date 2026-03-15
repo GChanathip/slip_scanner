@@ -239,6 +239,9 @@ Guidelines:
       return result.response;
     } on TimeoutException {
       return 'Sorry, I took too long to respond. Please try again.';
+    } catch (e) {
+      debugPrint('LLM generation failed: $e');
+      return 'Sorry, I encountered an error processing your request. Please try again.';
     }
   }
 }

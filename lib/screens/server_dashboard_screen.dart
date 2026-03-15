@@ -65,9 +65,21 @@ class _ServerDashboardScreenState extends ConsumerState<ServerDashboardScreen> {
   }
 
   Future<void> _saveConfig() async {
+    final token = _tokenController.text.trim();
+    final secret = _secretController.text.trim();
+    if (token.isEmpty || secret.isEmpty) {
+      if (mounted) {
+        showFToast(
+          context: context,
+          title: const Text('Error'),
+          description: const Text('Channel token and secret cannot be empty'),
+        );
+      }
+      return;
+    }
     try {
-      await ConfigService.setLineChannelToken(_tokenController.text.trim());
-      await ConfigService.setLineChannelSecret(_secretController.text.trim());
+      await ConfigService.setLineChannelToken(token);
+      await ConfigService.setLineChannelSecret(secret);
       final port =
           int.tryParse(_portController.text.trim()) ?? ConfigService.defaultPort;
       await ConfigService.setServerPort(port);
@@ -87,7 +99,7 @@ class _ServerDashboardScreenState extends ConsumerState<ServerDashboardScreen> {
 
   int? _validatePort() {
     final port = int.tryParse(_portController.text.trim());
-    if (port == null || port < 1 || port > 65535) return null;
+    if (port == null || port < 1024 || port > 65535) return null;
     return port;
   }
 
@@ -105,7 +117,7 @@ class _ServerDashboardScreenState extends ConsumerState<ServerDashboardScreen> {
           showFToast(
             context: context,
             title: const Text('Error'),
-            description: const Text('Invalid port (must be 1-65535)'),
+            description: const Text('Invalid port (must be 1024-65535)'),
           );
         }
         return;
@@ -134,14 +146,16 @@ class _ServerDashboardScreenState extends ConsumerState<ServerDashboardScreen> {
         }
         await _serverService.start();
       }
-    } catch (e,s) {
-      debugPrint('Error: $e');
+    } catch (e, s) {
+      debugPrint('Server toggle error: $e');
       debugPrintStack(stackTrace: s);
       if (mounted) {
         showFToast(
           context: context,
           title: const Text('Error'),
-          description: Text('$e'),
+          description: const Text(
+            'Failed to start/stop server. Check your configuration and try again.',
+          ),
         );
       }
     } finally {

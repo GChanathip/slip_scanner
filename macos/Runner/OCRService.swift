@@ -13,7 +13,10 @@ class OCRService {
         var amount: Double?
         var date: String?
 
+        let semaphore = DispatchSemaphore(value: 0)
+
         let request = VNRecognizeTextRequest { [weak self] (request, error) in
+            defer { semaphore.signal() }
             guard let self = self,
                   error == nil,
                   let observations = request.results as? [VNRecognizedTextObservation] else { return }
@@ -37,6 +40,7 @@ class OCRService {
 
         do {
             try requestHandler.perform([request])
+            semaphore.wait()
         } catch {
             #if DEBUG
             print("Vision error: \(error)")
@@ -286,7 +290,7 @@ class OCRService {
 
         if let match = RegexPatterns.fourDigitBuddhistYear.firstMatch(in: result, options: [], range: range) {
             let year = nsResult.substring(with: match.range)
-            if let y = Int(year) {
+            if let y = Int(year), y >= 2400, y <= 2700 {
                 result = result.replacingOccurrences(of: year, with: String(y - 543))
             }
         }
@@ -296,7 +300,7 @@ class OCRService {
 
         if let match = RegexPatterns.twoDigitBuddhistYear.firstMatch(in: result, options: [], range: range2) {
             let shortYear = nsResult2.substring(with: match.range)
-            if let y = Int(shortYear) {
+            if let y = Int(shortYear), y >= 40, y <= 99 {
                 result = result.replacingOccurrences(of: shortYear, with: String(2500 + y - 543))
             }
         }

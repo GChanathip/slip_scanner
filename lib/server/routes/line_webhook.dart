@@ -18,13 +18,25 @@ class LineWebhookHandler {
 
   LineWebhookHandler({required this.lineService});
 
+  /// Maximum webhook body size (10 MB).
+  static const _maxBodySize = 10 * 1024 * 1024;
+
   Future<Response> handle(Request request) async {
     if (lineService == null) {
       return Response(503, body: 'LINE service not configured');
     }
 
+    // 0. Guard against oversized payloads
+    final contentLength = request.contentLength;
+    if (contentLength != null && contentLength > _maxBodySize) {
+      return Response(413, body: 'Payload too large');
+    }
+
     // 1. Read body
     final body = await request.readAsString();
+    if (body.length > _maxBodySize) {
+      return Response(413, body: 'Payload too large');
+    }
 
     // 2. Verify signature
     final signature = request.headers['x-line-signature'];

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:characters/characters.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -47,13 +48,15 @@ class LineService {
 
   /// Download image content for a message.
   Future<Uint8List> getMessageContent(String messageId) async {
-    final response = await _client.get(
-      Uri.parse('$_dataApiBase/message/$messageId/content'),
-      headers: {'Authorization': 'Bearer $channelAccessToken'},
-    );
+    final response = await _client
+        .get(
+          Uri.parse('$_dataApiBase/message/$messageId/content'),
+          headers: {'Authorization': 'Bearer $channelAccessToken'},
+        )
+        .timeout(const Duration(seconds: 30));
     if (response.statusCode != 200) {
       throw Exception(
-        'Failed to get message content: ${response.statusCode} ${response.body}',
+        'Failed to get message content: ${response.statusCode}',
       );
     }
     return response.bodyBytes;
@@ -102,10 +105,14 @@ class LineService {
   }
 
   /// Helper: create a text message object.
-  static Map<String, dynamic> textMessage(String text) => {
-        'type': 'text',
-        'text': text.length > 5000 ? '${text.substring(0, 4997)}...' : text,
-      };
+  /// Truncates safely using [Characters] to avoid splitting multi-byte Thai chars.
+  static Map<String, dynamic> textMessage(String text) {
+    if (text.length <= 5000) {
+      return {'type': 'text', 'text': text};
+    }
+    final truncated = text.characters.take(4997).toString();
+    return {'type': 'text', 'text': '$truncated...'};
+  }
 
   void dispose() {
     _client.close();

@@ -41,6 +41,10 @@ class ServerService {
     try {
       _port = port ?? await ConfigService.getServerPort();
 
+      // Dispose any stale LINE service before creating a new one
+      _lineService?.dispose();
+      _lineService = null;
+
       // Initialize LINE service if configured
       final token = await ConfigService.getLineChannelToken();
       final secret = await ConfigService.getLineChannelSecret();

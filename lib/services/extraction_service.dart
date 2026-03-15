@@ -140,14 +140,17 @@ Rules:
   }
 
   /// Validate category against the given valid names; falls back to 'other'.
+  /// Checks case-sensitive first (custom categories preserve casing), then
+  /// falls back to a lowercase match (built-in slugs are always lowercase).
   static String? _validateCategory(dynamic value, Set<String> validCategories) {
     if (value == null) return 'other';
-    final str = value.toString().toLowerCase().trim();
-    if (validCategories.contains(str)) return str;
-    // Allow custom category names (exact match, case-sensitive in storage)
-    if (validCategories.contains(value.toString().trim())) {
-      return value.toString().trim();
-    }
+    final trimmed = value.toString().trim();
+    if (trimmed.isEmpty) return 'other';
+    // Exact match first (preserves custom category casing)
+    if (validCategories.contains(trimmed)) return trimmed;
+    // Lowercase fallback (handles LLM returning "Food" for built-in "food")
+    final lower = trimmed.toLowerCase();
+    if (validCategories.contains(lower)) return lower;
     return 'other';
   }
 

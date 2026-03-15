@@ -25,9 +25,15 @@ class AppDelegate: FlutterAppDelegate {
                     result(FlutterError(code: "INVALID_ARGUMENT", message: "imageData required", details: nil))
                     return
                 }
-                DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                DispatchQueue.global(qos: .userInitiated).async {
                     autoreleasepool {
-                        let slipResult = self?.slipProcessor?.processImageData(imageData.data)
+                        guard let processor = self?.slipProcessor else {
+                            DispatchQueue.main.async {
+                                result(FlutterError(code: "UNAVAILABLE", message: "Processor not available", details: nil))
+                            }
+                            return
+                        }
+                        let slipResult = processor.processImageData(imageData.data)
                         DispatchQueue.main.async {
                             result(slipResult)
                         }
@@ -40,9 +46,15 @@ class AppDelegate: FlutterAppDelegate {
                     result(FlutterError(code: "INVALID_ARGUMENT", message: "imagePath required", details: nil))
                     return
                 }
-                DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                DispatchQueue.global(qos: .userInitiated).async {
                     autoreleasepool {
-                        let slipResult = self?.slipProcessor?.processImageFile(at: imagePath)
+                        guard let processor = self?.slipProcessor else {
+                            DispatchQueue.main.async {
+                                result(FlutterError(code: "UNAVAILABLE", message: "Processor not available", details: nil))
+                            }
+                            return
+                        }
+                        let slipResult = processor.processImageFile(at: imagePath)
                         DispatchQueue.main.async {
                             result(slipResult)
                         }

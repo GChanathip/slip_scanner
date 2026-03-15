@@ -200,6 +200,15 @@ class ExtractionQueue extends _$ExtractionQueue {
 
       debugPrint('⚡ Processing slip ${slip.id}...');
 
+      // Skip slips with empty OCR text (nothing useful to extract)
+      if (slip.extractedText.trim().isEmpty) {
+        debugPrint('⏭ Slip ${slip.id} has empty text, marking completed');
+        await DatabaseService.updateLLMStatus(slip.id!, 'completed');
+        final pending = await DatabaseService.countSlipsWithStatus('pending');
+        state = state.copyWith(pendingCount: pending, currentSlipId: null);
+        return true;
+      }
+
       // Mark as processing
       await DatabaseService.updateLLMStatus(slip.id!, 'processing');
 
