@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$CactusState {
 
- bool get isDownloading; bool get isInitializing; bool get isModelLoaded; double get downloadProgress; String get downloadStatus; String get selectedModel; String? get error;
+ bool get isDownloading; bool get isInitializing; bool get isModelLoaded; double get downloadProgress; String get downloadStatus; String get selectedModel; bool get hasExplicitlySelectedModel; String? get error;
 /// Create a copy of CactusState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +25,16 @@ $CactusStateCopyWith<CactusState> get copyWith => _$CactusStateCopyWithImpl<Cact
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is CactusState&&(identical(other.isDownloading, isDownloading) || other.isDownloading == isDownloading)&&(identical(other.isInitializing, isInitializing) || other.isInitializing == isInitializing)&&(identical(other.isModelLoaded, isModelLoaded) || other.isModelLoaded == isModelLoaded)&&(identical(other.downloadProgress, downloadProgress) || other.downloadProgress == downloadProgress)&&(identical(other.downloadStatus, downloadStatus) || other.downloadStatus == downloadStatus)&&(identical(other.selectedModel, selectedModel) || other.selectedModel == selectedModel)&&(identical(other.error, error) || other.error == error));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is CactusState&&(identical(other.isDownloading, isDownloading) || other.isDownloading == isDownloading)&&(identical(other.isInitializing, isInitializing) || other.isInitializing == isInitializing)&&(identical(other.isModelLoaded, isModelLoaded) || other.isModelLoaded == isModelLoaded)&&(identical(other.downloadProgress, downloadProgress) || other.downloadProgress == downloadProgress)&&(identical(other.downloadStatus, downloadStatus) || other.downloadStatus == downloadStatus)&&(identical(other.selectedModel, selectedModel) || other.selectedModel == selectedModel)&&(identical(other.hasExplicitlySelectedModel, hasExplicitlySelectedModel) || other.hasExplicitlySelectedModel == hasExplicitlySelectedModel)&&(identical(other.error, error) || other.error == error));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,isDownloading,isInitializing,isModelLoaded,downloadProgress,downloadStatus,selectedModel,error);
+int get hashCode => Object.hash(runtimeType,isDownloading,isInitializing,isModelLoaded,downloadProgress,downloadStatus,selectedModel,hasExplicitlySelectedModel,error);
 
 @override
 String toString() {
-  return 'CactusState(isDownloading: $isDownloading, isInitializing: $isInitializing, isModelLoaded: $isModelLoaded, downloadProgress: $downloadProgress, downloadStatus: $downloadStatus, selectedModel: $selectedModel, error: $error)';
+  return 'CactusState(isDownloading: $isDownloading, isInitializing: $isInitializing, isModelLoaded: $isModelLoaded, downloadProgress: $downloadProgress, downloadStatus: $downloadStatus, selectedModel: $selectedModel, hasExplicitlySelectedModel: $hasExplicitlySelectedModel, error: $error)';
 }
 
 
@@ -45,7 +45,7 @@ abstract mixin class $CactusStateCopyWith<$Res>  {
   factory $CactusStateCopyWith(CactusState value, $Res Function(CactusState) _then) = _$CactusStateCopyWithImpl;
 @useResult
 $Res call({
- bool isDownloading, bool isInitializing, bool isModelLoaded, double downloadProgress, String downloadStatus, String selectedModel, String? error
+ bool isDownloading, bool isInitializing, bool isModelLoaded, double downloadProgress, String downloadStatus, String selectedModel, bool hasExplicitlySelectedModel, String? error
 });
 
 
@@ -62,7 +62,7 @@ class _$CactusStateCopyWithImpl<$Res>
 
 /// Create a copy of CactusState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? isDownloading = null,Object? isInitializing = null,Object? isModelLoaded = null,Object? downloadProgress = null,Object? downloadStatus = null,Object? selectedModel = null,Object? error = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? isDownloading = null,Object? isInitializing = null,Object? isModelLoaded = null,Object? downloadProgress = null,Object? downloadStatus = null,Object? selectedModel = null,Object? hasExplicitlySelectedModel = null,Object? error = freezed,}) {
   return _then(_self.copyWith(
 isDownloading: null == isDownloading ? _self.isDownloading : isDownloading // ignore: cast_nullable_to_non_nullable
 as bool,isInitializing: null == isInitializing ? _self.isInitializing : isInitializing // ignore: cast_nullable_to_non_nullable
@@ -70,7 +70,8 @@ as bool,isModelLoaded: null == isModelLoaded ? _self.isModelLoaded : isModelLoad
 as bool,downloadProgress: null == downloadProgress ? _self.downloadProgress : downloadProgress // ignore: cast_nullable_to_non_nullable
 as double,downloadStatus: null == downloadStatus ? _self.downloadStatus : downloadStatus // ignore: cast_nullable_to_non_nullable
 as String,selectedModel: null == selectedModel ? _self.selectedModel : selectedModel // ignore: cast_nullable_to_non_nullable
-as String,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
+as String,hasExplicitlySelectedModel: null == hasExplicitlySelectedModel ? _self.hasExplicitlySelectedModel : hasExplicitlySelectedModel // ignore: cast_nullable_to_non_nullable
+as bool,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
 }
@@ -156,10 +157,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool isDownloading,  bool isInitializing,  bool isModelLoaded,  double downloadProgress,  String downloadStatus,  String selectedModel,  String? error)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool isDownloading,  bool isInitializing,  bool isModelLoaded,  double downloadProgress,  String downloadStatus,  String selectedModel,  bool hasExplicitlySelectedModel,  String? error)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _CactusState() when $default != null:
-return $default(_that.isDownloading,_that.isInitializing,_that.isModelLoaded,_that.downloadProgress,_that.downloadStatus,_that.selectedModel,_that.error);case _:
+return $default(_that.isDownloading,_that.isInitializing,_that.isModelLoaded,_that.downloadProgress,_that.downloadStatus,_that.selectedModel,_that.hasExplicitlySelectedModel,_that.error);case _:
   return orElse();
 
 }
@@ -177,10 +178,10 @@ return $default(_that.isDownloading,_that.isInitializing,_that.isModelLoaded,_th
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool isDownloading,  bool isInitializing,  bool isModelLoaded,  double downloadProgress,  String downloadStatus,  String selectedModel,  String? error)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool isDownloading,  bool isInitializing,  bool isModelLoaded,  double downloadProgress,  String downloadStatus,  String selectedModel,  bool hasExplicitlySelectedModel,  String? error)  $default,) {final _that = this;
 switch (_that) {
 case _CactusState():
-return $default(_that.isDownloading,_that.isInitializing,_that.isModelLoaded,_that.downloadProgress,_that.downloadStatus,_that.selectedModel,_that.error);case _:
+return $default(_that.isDownloading,_that.isInitializing,_that.isModelLoaded,_that.downloadProgress,_that.downloadStatus,_that.selectedModel,_that.hasExplicitlySelectedModel,_that.error);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -197,10 +198,10 @@ return $default(_that.isDownloading,_that.isInitializing,_that.isModelLoaded,_th
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool isDownloading,  bool isInitializing,  bool isModelLoaded,  double downloadProgress,  String downloadStatus,  String selectedModel,  String? error)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool isDownloading,  bool isInitializing,  bool isModelLoaded,  double downloadProgress,  String downloadStatus,  String selectedModel,  bool hasExplicitlySelectedModel,  String? error)?  $default,) {final _that = this;
 switch (_that) {
 case _CactusState() when $default != null:
-return $default(_that.isDownloading,_that.isInitializing,_that.isModelLoaded,_that.downloadProgress,_that.downloadStatus,_that.selectedModel,_that.error);case _:
+return $default(_that.isDownloading,_that.isInitializing,_that.isModelLoaded,_that.downloadProgress,_that.downloadStatus,_that.selectedModel,_that.hasExplicitlySelectedModel,_that.error);case _:
   return null;
 
 }
@@ -212,7 +213,7 @@ return $default(_that.isDownloading,_that.isInitializing,_that.isModelLoaded,_th
 
 
 class _CactusState extends CactusState {
-  const _CactusState({this.isDownloading = false, this.isInitializing = false, this.isModelLoaded = false, this.downloadProgress = 0.0, this.downloadStatus = '', this.selectedModel = 'qwen3-0.6', this.error}): super._();
+  const _CactusState({this.isDownloading = false, this.isInitializing = false, this.isModelLoaded = false, this.downloadProgress = 0.0, this.downloadStatus = '', this.selectedModel = 'qwen3-0.6', this.hasExplicitlySelectedModel = false, this.error}): super._();
   
 
 @override@JsonKey() final  bool isDownloading;
@@ -221,6 +222,7 @@ class _CactusState extends CactusState {
 @override@JsonKey() final  double downloadProgress;
 @override@JsonKey() final  String downloadStatus;
 @override@JsonKey() final  String selectedModel;
+@override@JsonKey() final  bool hasExplicitlySelectedModel;
 @override final  String? error;
 
 /// Create a copy of CactusState
@@ -233,16 +235,16 @@ _$CactusStateCopyWith<_CactusState> get copyWith => __$CactusStateCopyWithImpl<_
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CactusState&&(identical(other.isDownloading, isDownloading) || other.isDownloading == isDownloading)&&(identical(other.isInitializing, isInitializing) || other.isInitializing == isInitializing)&&(identical(other.isModelLoaded, isModelLoaded) || other.isModelLoaded == isModelLoaded)&&(identical(other.downloadProgress, downloadProgress) || other.downloadProgress == downloadProgress)&&(identical(other.downloadStatus, downloadStatus) || other.downloadStatus == downloadStatus)&&(identical(other.selectedModel, selectedModel) || other.selectedModel == selectedModel)&&(identical(other.error, error) || other.error == error));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CactusState&&(identical(other.isDownloading, isDownloading) || other.isDownloading == isDownloading)&&(identical(other.isInitializing, isInitializing) || other.isInitializing == isInitializing)&&(identical(other.isModelLoaded, isModelLoaded) || other.isModelLoaded == isModelLoaded)&&(identical(other.downloadProgress, downloadProgress) || other.downloadProgress == downloadProgress)&&(identical(other.downloadStatus, downloadStatus) || other.downloadStatus == downloadStatus)&&(identical(other.selectedModel, selectedModel) || other.selectedModel == selectedModel)&&(identical(other.hasExplicitlySelectedModel, hasExplicitlySelectedModel) || other.hasExplicitlySelectedModel == hasExplicitlySelectedModel)&&(identical(other.error, error) || other.error == error));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,isDownloading,isInitializing,isModelLoaded,downloadProgress,downloadStatus,selectedModel,error);
+int get hashCode => Object.hash(runtimeType,isDownloading,isInitializing,isModelLoaded,downloadProgress,downloadStatus,selectedModel,hasExplicitlySelectedModel,error);
 
 @override
 String toString() {
-  return 'CactusState(isDownloading: $isDownloading, isInitializing: $isInitializing, isModelLoaded: $isModelLoaded, downloadProgress: $downloadProgress, downloadStatus: $downloadStatus, selectedModel: $selectedModel, error: $error)';
+  return 'CactusState(isDownloading: $isDownloading, isInitializing: $isInitializing, isModelLoaded: $isModelLoaded, downloadProgress: $downloadProgress, downloadStatus: $downloadStatus, selectedModel: $selectedModel, hasExplicitlySelectedModel: $hasExplicitlySelectedModel, error: $error)';
 }
 
 
@@ -253,7 +255,7 @@ abstract mixin class _$CactusStateCopyWith<$Res> implements $CactusStateCopyWith
   factory _$CactusStateCopyWith(_CactusState value, $Res Function(_CactusState) _then) = __$CactusStateCopyWithImpl;
 @override @useResult
 $Res call({
- bool isDownloading, bool isInitializing, bool isModelLoaded, double downloadProgress, String downloadStatus, String selectedModel, String? error
+ bool isDownloading, bool isInitializing, bool isModelLoaded, double downloadProgress, String downloadStatus, String selectedModel, bool hasExplicitlySelectedModel, String? error
 });
 
 
@@ -270,7 +272,7 @@ class __$CactusStateCopyWithImpl<$Res>
 
 /// Create a copy of CactusState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? isDownloading = null,Object? isInitializing = null,Object? isModelLoaded = null,Object? downloadProgress = null,Object? downloadStatus = null,Object? selectedModel = null,Object? error = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? isDownloading = null,Object? isInitializing = null,Object? isModelLoaded = null,Object? downloadProgress = null,Object? downloadStatus = null,Object? selectedModel = null,Object? hasExplicitlySelectedModel = null,Object? error = freezed,}) {
   return _then(_CactusState(
 isDownloading: null == isDownloading ? _self.isDownloading : isDownloading // ignore: cast_nullable_to_non_nullable
 as bool,isInitializing: null == isInitializing ? _self.isInitializing : isInitializing // ignore: cast_nullable_to_non_nullable
@@ -278,7 +280,8 @@ as bool,isModelLoaded: null == isModelLoaded ? _self.isModelLoaded : isModelLoad
 as bool,downloadProgress: null == downloadProgress ? _self.downloadProgress : downloadProgress // ignore: cast_nullable_to_non_nullable
 as double,downloadStatus: null == downloadStatus ? _self.downloadStatus : downloadStatus // ignore: cast_nullable_to_non_nullable
 as String,selectedModel: null == selectedModel ? _self.selectedModel : selectedModel // ignore: cast_nullable_to_non_nullable
-as String,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
+as String,hasExplicitlySelectedModel: null == hasExplicitlySelectedModel ? _self.hasExplicitlySelectedModel : hasExplicitlySelectedModel // ignore: cast_nullable_to_non_nullable
+as bool,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
 }

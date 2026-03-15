@@ -11,6 +11,7 @@ import '../providers/extraction_provider.dart';
 import '../providers/extraction_state.dart';
 import '../server/server_service.dart';
 import '../services/config_service.dart';
+import '../utils/ensure_model.dart';
 
 @RoutePage()
 class ServerDashboardScreen extends ConsumerStatefulWidget {
@@ -76,16 +77,9 @@ class _ServerDashboardScreenState extends ConsumerState<ServerDashboardScreen> {
 
   /// Ensure CactusLM is loaded and extraction queue is running.
   Future<void> _ensureModelAndExtraction() async {
-    final cactusState = ref.read(cactusProvider);
-    if (!cactusState.isModelLoaded && !cactusState.isLoading) {
-      await ref
-          .read(cactusProvider.notifier)
-          .downloadAndInitialize(cactusState.selectedModel);
-    }
-    if (ref.read(cactusProvider).isModelLoaded) {
-      ref
-          .read(extractionQueueProvider.notifier)
-          .startBackgroundProcessing();
+    final success = await ensureModelLoaded(context, ref);
+    if (!success) {
+      throw Exception('Model initialization required to start server');
     }
   }
 

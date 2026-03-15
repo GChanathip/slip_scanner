@@ -7,6 +7,7 @@ import '../providers/analysis_state.dart';
 import '../providers/cactus_provider.dart';
 import '../providers/extraction_provider.dart';
 import '../router/app_router.dart';
+import '../utils/ensure_model.dart';
 import '../utils/formatters.dart';
 
 const _categoryIcons = <String, IconData>{
@@ -62,13 +63,7 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
   }
 
   Future<void> _ensureModelLoaded() async {
-    final cactusState = ref.read(cactusProvider);
-    if (!cactusState.isModelLoaded && !cactusState.isLoading) {
-      await ref.read(cactusProvider.notifier).downloadAndInitialize(cactusState.selectedModel);
-      if (ref.read(cactusProvider).isModelLoaded) {
-        ref.read(extractionQueueProvider.notifier).startBackgroundProcessing();
-      }
-    }
+    await ensureModelLoaded(context, ref);
   }
 
   void _selectDateRange() async {

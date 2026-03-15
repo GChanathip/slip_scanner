@@ -6,6 +6,7 @@ import '../providers/chat_provider.dart';
 import '../providers/chat_state.dart';
 import '../providers/cactus_provider.dart';
 import '../providers/extraction_provider.dart';
+import '../utils/ensure_model.dart';
 import '../utils/formatters.dart';
 
 @RoutePage()
@@ -45,10 +46,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Future<void> _ensureModelLoaded() async {
-    final cactusState = ref.read(cactusProvider);
-    if (!cactusState.isModelLoaded && !cactusState.isLoading) {
-      await ref.read(cactusProvider.notifier).downloadAndInitialize(cactusState.selectedModel);
-    }
+    await ensureModelLoaded(context, ref);
   }
 
   @override
