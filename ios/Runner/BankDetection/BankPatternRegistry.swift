@@ -11,10 +11,10 @@ class BankPatternRegistry {
         .kbank: KBankPatterns.patternSet,
         .dime: DimePatterns.patternSet,
         .ktb: KTBPatterns.patternSet,
+        .gsb: GSBPatterns.patternSet,
         // Future banks:
         // .bay: BAYPatterns.patternSet,
         // .bbl: BBLPatterns.patternSet,
-        // .gsb: GSBPatterns.patternSet,
         // .ttb: TTBPatterns.patternSet,
     ]
 
