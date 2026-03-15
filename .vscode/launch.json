@@ -5,18 +5,18 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "slip_scanner",
+            "name": "avers",
             "request": "launch",
             "type": "dart"
         },
         {
-            "name": "slip_scanner (profile mode)",
+            "name": "avers (profile mode)",
             "request": "launch",
             "type": "dart",
             "flutterMode": "profile"
         },
         {
-            "name": "slip_scanner (release mode)",
+            "name": "avers (release mode)",
             "request": "launch",
             "type": "dart",
             "flutterMode": "release"

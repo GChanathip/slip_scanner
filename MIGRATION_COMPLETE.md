@@ -2,7 +2,7 @@
 
 ## Summary
 
-Successfully migrated **slip_scanner** from `shadcn_ui` to **ForUI** design system with **FScaffold** implementation.
+Successfully migrated **avers** from `shadcn_ui` to **ForUI** design system with **FScaffold** implementation.
 
 ### Migration Date
 January 4, 2026

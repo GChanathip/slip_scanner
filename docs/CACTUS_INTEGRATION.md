@@ -1,10 +1,10 @@
 # Cactus LLM Integration Summary
 
-This document summarizes the integration of Cactus Flutter LLM into the Slip Scanner app for AI-powered expense analysis.
+This document summarizes the integration of Cactus Flutter LLM into the Avers app for AI-powered expense analysis.
 
 ## Overview
 
-The Slip Scanner app now includes on-device AI capabilities using the Cactus Flutter plugin. Users can:
+The Avers app now includes on-device AI capabilities using the Cactus Flutter plugin. Users can:
 - Get AI-powered insights about their spending patterns
 - Chat with an AI assistant about their expenses
 - Have slips automatically enriched with extracted recipient, notes, and category data

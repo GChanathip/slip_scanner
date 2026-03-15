@@ -2,7 +2,7 @@
 
 ## User Segment
 
-Thai users of the Slip Scanner app who transact with banks beyond SCB, KBank, and Dime — primarily Bangkok Bank, Krungthai Bank, Krungsri, ttb, and Government Savings Bank account holders who currently get no OCR extraction from their payment slips.
+Thai users of the Avers app who transact with banks beyond SCB, KBank, and Dime — primarily Bangkok Bank, Krungthai Bank, Krungsri, ttb, and Government Savings Bank account holders who currently get no OCR extraction from their payment slips.
 
 ## Problem Statement
 

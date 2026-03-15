@@ -2,7 +2,7 @@
 
 ## Migration Completed: January 4, 2026
 
-Successfully migrated slip_scanner from `shadcn_ui` to `ForUI` design system.
+Successfully migrated avers from `shadcn_ui` to `ForUI` design system.
 
 ## Changes Overview
 
