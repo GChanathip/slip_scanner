@@ -64,8 +64,23 @@ class Analysis extends _$Analysis {
         monthlyTrend[monthKey] = (monthlyTrend[monthKey] ?? 0) + slip.amount;
       }
 
-      // Generate insights
-      final insights = await _generateInsights(slips, categoryBreakdown, monthlyTrend);
+      // Load detailed analytics in parallel
+      final effectiveStart = startDate ?? DateTime(2000);
+      final effectiveEnd = endDate ?? DateTime.now();
+
+      final results = await Future.wait([
+        DatabaseService.getDailyTotals(effectiveStart, effectiveEnd),
+        DatabaseService.getWeeklyTotals(effectiveStart, effectiveEnd),
+        DatabaseService.getTopRecipients(effectiveStart, effectiveEnd),
+        DatabaseService.getCategoryTrend(effectiveStart, effectiveEnd),
+        _generateInsights(slips, categoryBreakdown, monthlyTrend),
+      ]);
+
+      final dailyTotals = results[0] as Map<String, double>;
+      final weeklyTotals = results[1] as Map<String, double>;
+      final topRecipients = results[2] as Map<String, double>;
+      final categoryTrend = results[3] as Map<String, Map<String, double>>;
+      final insights = results[4] as List<InsightData>;
 
       state = state.copyWith(
         categoryBreakdown: categoryBreakdown,
@@ -74,6 +89,10 @@ class Analysis extends _$Analysis {
         transactionCount: count,
         averageTransaction: avg,
         insights: insights,
+        dailyTotals: dailyTotals,
+        weeklyTotals: weeklyTotals,
+        topRecipients: topRecipients,
+        categoryTrend: categoryTrend,
         isLoading: false,
       );
     } catch (e) {
@@ -231,5 +250,10 @@ Focus on actionable budget advice. Keep it brief.''';
   /// Set date range and reload
   Future<void> setDateRange(DateTime? start, DateTime? end) async {
     await loadAnalysis(startDate: start, endDate: end);
+  }
+
+  /// Switch active analytics view
+  void setActiveView(AnalyticsView view) {
+    state = state.copyWith(activeView: view);
   }
 }

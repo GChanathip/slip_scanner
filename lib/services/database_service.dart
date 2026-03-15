@@ -368,6 +368,99 @@ class DatabaseService {
     );
   }
 
+  // ============ Analytics Query Methods ============
+
+  /// Get daily spending totals within a date range
+  static Future<Map<String, double>> getDailyTotals(DateTime start, DateTime end) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT
+        strftime('%Y-%m-%d', date) as day,
+        SUM(amount) as total
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+      GROUP BY strftime('%Y-%m-%d', date)
+      ORDER BY day ASC
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    return {for (var row in result) row['day'] as String: (row['total'] as num).toDouble()};
+  }
+
+  /// Get weekly spending totals within a date range (ISO week)
+  static Future<Map<String, double>> getWeeklyTotals(DateTime start, DateTime end) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT
+        strftime('%Y-W%W', date) as week,
+        SUM(amount) as total,
+        COUNT(*) as count
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+      GROUP BY strftime('%Y-W%W', date)
+      ORDER BY week ASC
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    return {for (var row in result) row['week'] as String: (row['total'] as num).toDouble()};
+  }
+
+  /// Get yearly spending totals
+  static Future<Map<String, double>> getYearlyTotals() async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT
+        strftime('%Y', date) as year,
+        SUM(amount) as total
+      FROM payment_slips
+      GROUP BY strftime('%Y', date)
+      ORDER BY year ASC
+    ''');
+
+    return {for (var row in result) row['year'] as String: (row['total'] as num).toDouble()};
+  }
+
+  /// Get top recipients by total spending within a date range
+  static Future<Map<String, double>> getTopRecipients(DateTime start, DateTime end, {int limit = 10}) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT
+        COALESCE(recipientName, 'Unknown') as recipient,
+        SUM(amount) as total,
+        COUNT(*) as count
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+        AND recipientName IS NOT NULL AND recipientName != ''
+      GROUP BY recipientName
+      ORDER BY total DESC
+      LIMIT ?
+    ''', [start.toIso8601String(), end.toIso8601String(), limit]);
+
+    return {for (var row in result) row['recipient'] as String: (row['total'] as num).toDouble()};
+  }
+
+  /// Get category spending trend by month within a date range
+  static Future<Map<String, Map<String, double>>> getCategoryTrend(DateTime start, DateTime end) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT
+        strftime('%Y-%m', date) as month,
+        COALESCE(category, 'uncategorized') as cat,
+        SUM(amount) as total
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+      GROUP BY strftime('%Y-%m', date), COALESCE(category, 'uncategorized')
+      ORDER BY month ASC, total DESC
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    final trend = <String, Map<String, double>>{};
+    for (final row in result) {
+      final month = row['month'] as String;
+      final cat = row['cat'] as String;
+      final total = (row['total'] as num).toDouble();
+      trend.putIfAbsent(month, () => {})[cat] = total;
+    }
+    return trend;
+  }
+
   /// Get slips that haven't been indexed in RAG
   static Future<List<PaymentSlip>> getUnindexedSlips({int limit = 10}) async {
     final db = await database;
