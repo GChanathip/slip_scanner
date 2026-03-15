@@ -150,6 +150,36 @@ class DatabaseService {
       await db.execute('ALTER TABLE payment_slips ADD COLUMN isRecurring INTEGER DEFAULT 0');
       await db.execute('ALTER TABLE payment_slips ADD COLUMN recurringFrequency TEXT');
     }
+
+    if (oldVersion < 7) {
+      // Add categorySource to payment_slips
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN categorySource TEXT');
+
+      // Create custom_categories table
+      await db.execute('''
+        CREATE TABLE custom_categories(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+          icon TEXT NOT NULL DEFAULT 'utensils',
+          color TEXT NOT NULL DEFAULT 'orange',
+          createdAt TEXT NOT NULL
+        )
+      ''');
+
+      // Create category_rules table + index
+      await db.execute('''
+        CREATE TABLE category_rules(
+          recipientPattern TEXT PRIMARY KEY,
+          category TEXT NOT NULL,
+          source TEXT NOT NULL DEFAULT 'user',
+          createdAt TEXT NOT NULL
+        )
+      ''');
+
+      await db.execute('''
+        CREATE INDEX idx_category_rules_category ON category_rules(category)
+      ''');
+    }
   }
 
   static Future<int> insertPaymentSlip(PaymentSlip slip) async {
@@ -337,6 +367,7 @@ class DatabaseService {
     String? recipientName,
     String? notes,
     String? category,
+    String? categorySource,
   }) async {
     final db = await database;
     final updates = <String, dynamic>{
@@ -345,6 +376,7 @@ class DatabaseService {
     if (recipientName != null) updates['recipientName'] = recipientName;
     if (notes != null) updates['notes'] = notes;
     if (category != null) updates['category'] = category;
+    if (categorySource != null) updates['categorySource'] = categorySource;
 
     await db.update(
       'payment_slips',

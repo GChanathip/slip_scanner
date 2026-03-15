@@ -1,297 +1,314 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:slip_scanner/models/custom_category.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:slip_scanner/services/category_service.dart';
 
+// ─── Minimal v7 schema (only tables CategoryService touches) ─────────────────
+
+Future<Database> _openTestDb() async {
+  final db = await databaseFactoryFfi.openDatabase(
+    inMemoryDatabasePath,
+    options: OpenDatabaseOptions(
+      version: 1,
+      onCreate: (db, _) async {
+        await db.execute('''
+          CREATE TABLE custom_categories(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            icon TEXT NOT NULL DEFAULT 'utensils',
+            color TEXT NOT NULL DEFAULT 'orange',
+            createdAt TEXT NOT NULL
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE category_rules(
+            recipientPattern TEXT PRIMARY KEY,
+            category TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'user',
+            createdAt TEXT NOT NULL
+          )
+        ''');
+        await db.execute(
+          'CREATE INDEX idx_cr_cat ON category_rules(category)',
+        );
+        await db.execute('''
+          CREATE TABLE payment_slips(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            imagePath TEXT NOT NULL DEFAULT '',
+            amount REAL NOT NULL DEFAULT 0,
+            date TEXT NOT NULL DEFAULT '',
+            extractedText TEXT NOT NULL DEFAULT '',
+            createdAt TEXT NOT NULL DEFAULT '',
+            category TEXT,
+            llmProcessingStatus TEXT DEFAULT 'pending'
+          )
+        ''');
+      },
+    ),
+  );
+  return db;
+}
+
+// ─── Test helpers ─────────────────────────────────────────────────────────────
+
+Future<void> _insertSlip(Database db, {String? category}) =>
+    db.insert('payment_slips', {
+      'imagePath': '',
+      'amount': 10.0,
+      'date': '',
+      'extractedText': '',
+      'createdAt': DateTime.now().toIso8601String(),
+      if (category != null) 'category': category,
+    });
+
 void main() {
-  // For testing, we need to use sqflite_ffi
-  setUpAll(() {
-    sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
+  setUpAll(() => sqfliteFfiInit());
+
+  late Database db;
+  late CategoryService svc;
+
+  setUp(() async {
+    db = await _openTestDb();
+    svc = CategoryService(db);
   });
 
-  group('CategoryService', () {
-    group('Custom Categories CRUD', () {
-      test('create: adds new custom category', () async {
-        final category = await CategoryService.create(
-          'Meals',
-          'utensils',
-          'orange',
-        );
-        expect(category.name, 'Meals');
-        expect(category.icon, 'utensils');
-        expect(category.color, 'orange');
-        expect(category.id, isNotNull);
-      });
+  tearDown(() => db.close());
 
-      test('create: rejects duplicate names (case-insensitive)', () async {
-        await CategoryService.create('Meals', 'utensils', 'orange');
-        expect(
-          () => CategoryService.create('meals', 'coffee', 'brown'),
-          throwsException,
-        );
-      });
+  // ─── Custom category CRUD ─────────────────────────────────────────────────
 
-      test('create: rejects 21st category (20 limit)', () async {
-        // Create 20 categories
-        for (int i = 0; i < 20; i++) {
-          await CategoryService.create(
-            'Category$i',
-            'utensils',
-            'orange',
-          );
-        }
-        // 21st should fail
-        expect(
-          () => CategoryService.create('Category20', 'utensils', 'orange'),
-          throwsException,
-        );
-      });
-
-      test('getAll: returns all custom categories', () async {
-        await CategoryService.create('Meals', 'utensils', 'orange');
-        await CategoryService.create('Coffee', 'coffee', 'brown');
-
-        final categories = await CategoryService.getAll();
-        expect(categories.length, 2);
-        expect(categories.map((c) => c.name), containsAll(['Meals', 'Coffee']));
-      });
-
-      test('update: renames category with cascade', () async {
-        final category = await CategoryService.create(
-          'Meals',
-          'utensils',
-          'orange',
-        );
-
-        await CategoryService.update(
-          category.id!,
-          name: 'Dining',
-        );
-
-        final updated = await CategoryService.getAll();
-        expect(updated.first.name, 'Dining');
-      });
-
-      test('update: rejects duplicate renamed name', () async {
-        await CategoryService.create('Meals', 'utensils', 'orange');
-        final category = await CategoryService.create('Food', 'apple', 'red');
-
-        expect(
-          () => CategoryService.update(category.id!, name: 'Meals'),
-          throwsException,
-        );
-      });
-
-      test('update: cascades name to payment_slips', () async {
-        final category = await CategoryService.create(
-          'Meals',
-          'utensils',
-          'orange',
-        );
-
-        // Insert a slip with this category
-        // (requires mock or test DB setup)
-        // Verify slip's category is updated
-      });
-
-      test('delete: changes slips to "other" category', () async {
-        final category = await CategoryService.create(
-          'Meals',
-          'utensils',
-          'orange',
-        );
-
-        await CategoryService.delete(category.id!);
-
-        // Verify slips reassigned to 'other'
-        // Verify category removed from DB
-      });
-
-      test('delete: cascades to category_rules', () async {
-        final category = await CategoryService.create(
-          'Meals',
-          'utensils',
-          'orange',
-        );
-
-        // Create rule for 'Meals'
-        await CategoryService.upsertRule('Grab', 'Meals');
-
-        // Delete category
-        await CategoryService.delete(category.id!);
-
-        // Verify rule is deleted
-        final rule = await CategoryService.findRule('Grab');
-        expect(rule, isNull);
-      });
-
-      test('delete: fires budget cleanup event', () async {
-        final category = await CategoryService.create(
-          'Meals',
-          'utensils',
-          'orange',
-        );
-
-        // Track cleanup call
-        // await CategoryService.delete(category.id!);
-        // expect(budgetCleanupFired, true);
-      });
+  group('create', () {
+    test('returns new category with id', () async {
+      final cat = await svc.create('Dining', 'utensils', 'orange');
+      expect(cat.id, isNotNull);
+      expect(cat.name, 'Dining');
+      expect(cat.icon, 'utensils');
+      expect(cat.color, 'orange');
     });
 
-    group('Merge', () {
-      test('merge: cascades slips to target category', () async {
-        final source = await CategoryService.create('Meals', 'utensils', 'orange');
-        final target = await CategoryService.create('Dining', 'fork', 'red');
-
-        // Insert slips with source category
-        // Merge source → target
-        // Verify slips now have target category
-      });
-
-      test('merge: cascades rules to target', () async {
-        final source = await CategoryService.create('Meals', 'utensils', 'orange');
-        final target = await CategoryService.create('Dining', 'fork', 'red');
-
-        await CategoryService.upsertRule('Grab', 'Meals');
-        await CategoryService.merge(source.id!, 'Dining');
-
-        final rule = await CategoryService.findRule('Grab');
-        expect(rule?.category, 'Dining');
-      });
-
-      test('merge: deletes source category', () async {
-        final source = await CategoryService.create('Meals', 'utensils', 'orange');
-        final target = await CategoryService.create('Dining', 'fork', 'red');
-
-        await CategoryService.merge(source.id!, 'Dining');
-
-        final categories = await CategoryService.getAll();
-        expect(categories.map((c) => c.name), isNot(contains('Meals')));
-      });
-
-      test('merge: to built-in category allowed', () async {
-        final source = await CategoryService.create('Meals', 'utensils', 'orange');
-
-        // Merge to built-in 'food'
-        await CategoryService.merge(source.id!, 'food');
-
-        final categories = await CategoryService.getAll();
-        expect(categories.map((c) => c.name), isNot(contains('Meals')));
-      });
-
-      test('merge: last remaining custom category with 0 slips', () async {
-        final source = await CategoryService.create('Meals', 'utensils', 'orange');
-        final target = await CategoryService.create('Dining', 'fork', 'red');
-
-        await CategoryService.merge(source.id!, 'Dining');
-
-        // Verify success
-        final categories = await CategoryService.getAll();
-        expect(categories.length, 1);
-      });
+    test('trims whitespace from name', () async {
+      final cat = await svc.create('  Coffee  ', 'coffee', 'orange');
+      expect(cat.name, 'Coffee');
     });
 
-    group('Category Rules', () {
-      test('findRule: returns null for unknown recipient', () async {
-        final rule = await CategoryService.findRule('UnknownPerson');
-        expect(rule, isNull);
-      });
-
-      test('findRule: returns rule for exact normalized recipient', () async {
-        await CategoryService.upsertRule('Grab', 'transport');
-
-        final rule = await CategoryService.findRule('Grab');
-        expect(rule?.category, 'transport');
-      });
-
-      test('findRule: normalized match (whitespace, casing)', () async {
-        await CategoryService.upsertRule('Grab  App', 'transport');
-
-        // Normalization: lowercase, trim, collapse whitespace
-        final rule = await CategoryService.findRule('  GRAB APP  ');
-        expect(rule?.category, 'transport');
-      });
-
-      test('upsertRule: creates new rule', () async {
-        await CategoryService.upsertRule('Starbucks', 'food');
-
-        final rule = await CategoryService.findRule('Starbucks');
-        expect(rule?.category, 'food');
-        expect(rule?.source, 'user');
-      });
-
-      test('upsertRule: updates existing rule', () async {
-        await CategoryService.upsertRule('Starbucks', 'food');
-        await CategoryService.upsertRule('Starbucks', 'entertainment');
-
-        final rule = await CategoryService.findRule('Starbucks');
-        expect(rule?.category, 'entertainment');
-      });
-
-      test('getAllRules: returns all rules', () async {
-        await CategoryService.upsertRule('Grab', 'transport');
-        await CategoryService.upsertRule('Starbucks', 'food');
-
-        final rules = await CategoryService.getAllRules();
-        expect(rules.length, 2);
-      });
-
-      test('deleteRule: removes rule', () async {
-        await CategoryService.upsertRule('Grab', 'transport');
-
-        await CategoryService.deleteRule('Grab');
-
-        final rule = await CategoryService.findRule('Grab');
-        expect(rule, isNull);
-      });
+    test('rejects case-insensitive duplicate', () async {
+      await svc.create('Coffee', 'coffee', 'orange');
+      await expectLater(
+        () => svc.create('coffee', 'coffee', 'orange'),
+        throwsArgumentError,
+      );
+      await expectLater(
+        () => svc.create('COFFEE', 'coffee', 'orange'),
+        throwsArgumentError,
+      );
     });
 
-    group('Normalization', () {
-      test('normalizeRecipient: lowercase', () async {
-        final normalized = CategoryService.normalizeRecipient('GRAB');
-        expect(normalized, 'grab');
-      });
+    test('enforces 20-category limit', () async {
+      for (var i = 0; i < 20; i++) {
+        await svc.create('Cat$i', 'utensils', 'orange');
+      }
+      await expectLater(
+        () => svc.create('Cat20', 'utensils', 'orange'),
+        throwsStateError,
+      );
+    });
+  });
 
-      test('normalizeRecipient: trim', () async {
-        final normalized = CategoryService.normalizeRecipient('  Grab  ');
-        expect(normalized, 'grab');
-      });
-
-      test('normalizeRecipient: collapse whitespace', () async {
-        final normalized = CategoryService.normalizeRecipient('Grab   App');
-        expect(normalized, 'grab app');
-      });
-
-      test('normalizeRecipient: empty string', () async {
-        final normalized = CategoryService.normalizeRecipient('   ');
-        expect(normalized, '');
-      });
+  group('getAll', () {
+    test('returns empty list initially', () async {
+      expect(await svc.getAll(), isEmpty);
     });
 
-    group('Category Lookup', () {
-      test('getValidCategoryNames: includes built-in', () async {
-        final names = await CategoryService.getValidCategoryNames();
-        expect(names, containsAll(['food', 'transport', 'utilities']));
+    test('returns categories ordered by name', () async {
+      await svc.create('Zebra', 'utensils', 'orange');
+      await svc.create('Alpha', 'utensils', 'orange');
+      await svc.create('Mango', 'utensils', 'orange');
+      final names = (await svc.getAll()).map((c) => c.name).toList();
+      expect(names, ['Alpha', 'Mango', 'Zebra']);
+    });
+  });
+
+  group('update', () {
+    test('renames category and cascades to payment_slips', () async {
+      final cat = await svc.create('OldName', 'utensils', 'orange');
+      await _insertSlip(db, category: 'OldName');
+
+      await svc.update(cat.id!, name: 'NewName');
+
+      final slip = (await db.query('payment_slips')).first;
+      expect(slip['category'], 'NewName');
+
+      final updated = await svc.getAll();
+      expect(updated.first.name, 'NewName');
+    });
+
+    test('renames category and cascades to category_rules', () async {
+      final cat = await svc.create('OldName', 'utensils', 'orange');
+      await db.insert('category_rules', {
+        'recipientPattern': 'some shop',
+        'category': 'OldName',
+        'source': 'user',
+        'createdAt': DateTime.now().toIso8601String(),
       });
 
-      test('getValidCategoryNames: includes custom', () async {
-        await CategoryService.create('Meals', 'utensils', 'orange');
+      await svc.update(cat.id!, name: 'NewName');
 
-        final names = await CategoryService.getValidCategoryNames();
-        expect(names, contains('Meals'));
-      });
+      final rule = (await db.query('category_rules')).first;
+      expect(rule['category'], 'NewName');
+    });
 
-      test('getSlipCount: returns count for category', () async {
-        final category = await CategoryService.create(
-          'Meals',
-          'utensils',
-          'orange',
-        );
+    test('updates icon/color without rename cascade', () async {
+      final cat = await svc.create('Stable', 'utensils', 'orange');
+      await _insertSlip(db, category: 'Stable');
 
-        // Insert 3 slips with 'Meals' category
-        // Verify count is 3
-      });
+      await svc.update(cat.id!, icon: 'coffee', color: 'brown');
+
+      final slip = (await db.query('payment_slips')).first;
+      expect(slip['category'], 'Stable'); // unchanged
+    });
+
+    test('no-op when no fields provided', () async {
+      final cat = await svc.create('Stable', 'utensils', 'orange');
+      await svc.update(cat.id!);
+      expect((await svc.getAll()).first.name, 'Stable');
+    });
+  });
+
+  group('delete', () {
+    test('cascades slips to "other" and removes category', () async {
+      final cat = await svc.create('Fancy', 'utensils', 'orange');
+      await _insertSlip(db, category: 'Fancy');
+
+      await svc.delete(cat.id!);
+
+      expect(await svc.getAll(), isEmpty);
+      final slip = (await db.query('payment_slips')).first;
+      expect(slip['category'], 'other');
+    });
+
+    test('removes associated category_rules', () async {
+      final cat = await svc.create('Niche', 'utensils', 'orange');
+      await svc.upsertRule('niche shop', 'Niche');
+
+      await svc.delete(cat.id!);
+
+      expect(await svc.getAllRules(), isEmpty);
+    });
+
+    test('is a no-op for non-existent id', () async {
+      await svc.delete(9999); // must not throw
+    });
+  });
+
+  // ─── Merge ────────────────────────────────────────────────────────────────
+
+  group('merge', () {
+    test('cascades slips and rules to target, removes source', () async {
+      final src = await svc.create('Snacks', 'utensils', 'orange');
+      await _insertSlip(db, category: 'Snacks');
+      await svc.upsertRule('snack bar', 'Snacks');
+
+      await svc.merge(src.id!, 'food');
+
+      expect(await svc.getAll(), isEmpty);
+      final slip = (await db.query('payment_slips')).first;
+      expect(slip['category'], 'food');
+      final rule = (await svc.getAllRules()).first;
+      expect(rule.category, 'food');
+    });
+
+    test('merge to built-in category', () async {
+      final src = await svc.create('Meals', 'utensils', 'orange');
+      await svc.merge(src.id!, 'food');
+      expect(await svc.getAll(), isEmpty);
+    });
+
+    test('merge to custom target category', () async {
+      final src = await svc.create('Snacks', 'utensils', 'orange');
+      final target = await svc.create('Dining', 'fork', 'red');
+      await _insertSlip(db, category: 'Snacks');
+
+      await svc.merge(src.id!, target.name);
+
+      final slip = (await db.query('payment_slips')).first;
+      expect(slip['category'], 'Dining');
+      final remaining = (await svc.getAll()).map((c) => c.name).toList();
+      expect(remaining, ['Dining']);
+    });
+
+    test('throws for unknown source id', () async {
+      await expectLater(() => svc.merge(9999, 'food'), throwsArgumentError);
+    });
+  });
+
+  // ─── Category rules ───────────────────────────────────────────────────────
+
+  group('upsertRule / findRule', () {
+    test('stores and retrieves a rule', () async {
+      await svc.upsertRule('7-Eleven', 'shopping');
+      final rule = await svc.findRule('7-Eleven');
+      expect(rule, isNotNull);
+      expect(rule!.category, 'shopping');
+      expect(rule.source, 'user');
+    });
+
+    test('normalises on upsert and lookup', () async {
+      await svc.upsertRule('  Big C  ', 'groceries');
+      final rule = await svc.findRule('big c');
+      expect(rule, isNotNull);
+      expect(rule!.category, 'groceries');
+    });
+
+    test('replaces existing rule on conflict', () async {
+      await svc.upsertRule('MK Restaurant', 'food');
+      await svc.upsertRule('MK Restaurant', 'entertainment');
+      final rule = await svc.findRule('MK Restaurant');
+      expect(rule!.category, 'entertainment');
+    });
+
+    test('returns null for unknown recipient', () async {
+      expect(await svc.findRule('Unknown Merchant'), isNull);
+    });
+  });
+
+  group('deleteRule', () {
+    test('removes a rule by pattern', () async {
+      await svc.upsertRule('Shop A', 'shopping');
+      await svc.deleteRule(svc.normalizeRecipient('Shop A'));
+      expect(await svc.findRule('Shop A'), isNull);
+    });
+  });
+
+  group('getAllRules', () {
+    test('returns rules ordered by pattern', () async {
+      await svc.upsertRule('Zebra Store', 'shopping');
+      await svc.upsertRule('Alpha Café', 'food');
+      final patterns = (await svc.getAllRules()).map((r) => r.recipientPattern).toList();
+      expect(patterns, ['alpha café', 'zebra store']);
+    });
+  });
+
+  // ─── normalizeRecipient ───────────────────────────────────────────────────
+
+  group('normalizeRecipient', () {
+    test('lowercases, trims, collapses whitespace', () {
+      expect(svc.normalizeRecipient('  Hello   World  '), 'hello world');
+      expect(svc.normalizeRecipient('STARBUCKS'), 'starbucks');
+      expect(svc.normalizeRecipient('A  B  C'), 'a b c');
+    });
+  });
+
+  // ─── getValidCategoryNames ────────────────────────────────────────────────
+
+  group('getValidCategoryNames', () {
+    test('includes built-in slugs', () async {
+      final valid = await svc.getValidCategoryNames();
+      expect(valid, containsAll(['food', 'transport', 'other']));
+    });
+
+    test('includes custom category names', () async {
+      await svc.create('MySuperCategory', 'utensils', 'orange');
+      final valid = await svc.getValidCategoryNames();
+      expect(valid, contains('MySuperCategory'));
     });
   });
 }
