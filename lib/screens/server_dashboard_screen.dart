@@ -77,10 +77,7 @@ class _ServerDashboardScreenState extends ConsumerState<ServerDashboardScreen> {
 
   /// Ensure CactusLM is loaded and extraction queue is running.
   Future<void> _ensureModelAndExtraction() async {
-    final success = await ensureModelLoaded(context, ref);
-    if (!success) {
-      throw Exception('Model initialization required to start server');
-    }
+    await ensureModelLoaded(context, ref);
   }
 
   Future<void> _toggleServer() async {
