@@ -400,6 +400,7 @@ class DatabaseService {
       'recipientName',
       'notes',
       'category',
+      'categorySource',
       'isRecurring',
       'recurringFrequency',
       'amount',

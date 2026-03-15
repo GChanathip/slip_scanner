@@ -2,26 +2,29 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 import 'package:intl/intl.dart';
 import '../models/payment_slip.dart';
+import '../services/category_service.dart';
 import '../services/database_service.dart';
 import '../services/platform_service.dart';
 import '../models/category_registry.dart';
+import '../providers/category_provider.dart';
 import '../utils/dialogs.dart';
 import '../utils/formatters.dart';
 
 @RoutePage()
-class SlipDetailScreen extends StatefulWidget {
+class SlipDetailScreen extends ConsumerStatefulWidget {
   final PaymentSlip slip;
 
   const SlipDetailScreen({super.key, required this.slip});
 
   @override
-  State<SlipDetailScreen> createState() => _SlipDetailScreenState();
+  ConsumerState<SlipDetailScreen> createState() => _SlipDetailScreenState();
 }
 
-class _SlipDetailScreenState extends State<SlipDetailScreen> {
+class _SlipDetailScreenState extends ConsumerState<SlipDetailScreen> {
   Future<Uint8List?>? _assetImageFuture;
   late PaymentSlip _slip;
 
@@ -109,11 +112,15 @@ class _SlipDetailScreenState extends State<SlipDetailScreen> {
   Future<void> _save() async {
     if (_isSaving) return;
     setState(() => _isSaving = true);
+
+    final oldCategory = _slip.category;
+    final oldCategorySource = _slip.categorySource;
+    final categoryChanged = _editCategory != (oldCategory ?? 'other');
+    final recipientName = _recipientController.text.trim();
+
     try {
       final fields = <String, dynamic>{
-        'recipientName': _recipientController.text.trim().isEmpty
-            ? null
-            : _recipientController.text.trim(),
+        'recipientName': recipientName.isEmpty ? null : recipientName,
         'notes': _notesController.text.trim().isEmpty
             ? null
             : _notesController.text.trim(),
@@ -121,11 +128,25 @@ class _SlipDetailScreenState extends State<SlipDetailScreen> {
         'isRecurring': _editRecurring,
         'recurringFrequency': _editRecurring ? _editFrequency : null,
       };
+
+      // Set categorySource to 'user' when category is changed
+      if (categoryChanged) {
+        fields['categorySource'] = 'user';
+      }
+
       if (_isManual) {
         final amt = double.tryParse(_amountController.text.replaceAll(',', ''));
         if (amt != null && amt > 0) fields['amount'] = amt;
       }
       await DatabaseService.updateSlipFields(_slip.id!, fields);
+
+      // Create learning rule if category changed and recipient is present
+      CategoryService? svc;
+      if (categoryChanged && recipientName.isNotEmpty) {
+        final db = await DatabaseService.database;
+        svc = CategoryService(db);
+        await svc.upsertRule(recipientName, _editCategory);
+      }
 
       // Update local state with new values
       setState(() {
@@ -133,6 +154,7 @@ class _SlipDetailScreenState extends State<SlipDetailScreen> {
           recipientName: fields['recipientName'] as String?,
           notes: fields['notes'] as String?,
           category: _editCategory,
+          categorySource: categoryChanged ? 'user' : _slip.categorySource,
           isRecurring: _editRecurring,
           recurringFrequency: _editRecurring ? _editFrequency : null,
           amount: _isManual
@@ -143,12 +165,39 @@ class _SlipDetailScreenState extends State<SlipDetailScreen> {
         _isEditing = false;
       });
 
+      // Invalidate category providers so counts refresh
+      if (categoryChanged) {
+        ref.invalidate(builtinCategoriesWithCountsProvider);
+        ref.invalidate(customCategoriesWithCountsProvider);
+      }
+
       if (mounted) {
-        showFToast(
-          context: context,
-          title: const Text('Saved'),
-          description: const Text('Slip updated successfully'),
-        );
+        if (categoryChanged && recipientName.isNotEmpty) {
+          // Show learning SnackBar with undo
+          showFToast(
+            context: context,
+            duration: const Duration(seconds: 8),
+            title: const Text('Got it!'),
+            description: Text(
+              "Future '$recipientName' transactions will be categorized as ${getCategoryLabel(_editCategory)}",
+            ),
+            suffixBuilder: (_, _) => FButton(
+              variant: FButtonVariant.outline,
+              onPress: () => _undoLearning(
+                oldCategory: oldCategory,
+                oldCategorySource: oldCategorySource,
+                recipientName: recipientName,
+              ),
+              child: const Text('Undo'),
+            ),
+          );
+        } else {
+          showFToast(
+            context: context,
+            title: const Text('Saved'),
+            description: const Text('Slip updated successfully'),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -160,6 +209,51 @@ class _SlipDetailScreenState extends State<SlipDetailScreen> {
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _undoLearning({
+    required String? oldCategory,
+    required String? oldCategorySource,
+    required String recipientName,
+  }) async {
+    try {
+      // Revert category and categorySource in DB
+      await DatabaseService.updateSlipFields(_slip.id!, {
+        'category': oldCategory ?? 'other',
+        'categorySource': oldCategorySource,
+      });
+
+      // Delete the learning rule
+      final db = await DatabaseService.database;
+      final svc = CategoryService(db);
+      await svc.deleteRule(svc.normalizeRecipient(recipientName));
+
+      setState(() {
+        _slip = _slip.copyWith(
+          category: oldCategory ?? 'other',
+          categorySource: oldCategorySource,
+        );
+      });
+
+      ref.invalidate(builtinCategoriesWithCountsProvider);
+      ref.invalidate(customCategoriesWithCountsProvider);
+
+      if (mounted) {
+        showFToast(
+          context: context,
+          title: const Text('Undone'),
+          description: const Text('Category change undone'),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        showFToast(
+          context: context,
+          title: const Text('Error'),
+          description: Text('Failed to undo: $e'),
+        );
+      }
     }
   }
 
@@ -224,6 +318,36 @@ class _SlipDetailScreenState extends State<SlipDetailScreen> {
     );
   }
 
+  Widget _buildCategorySourceBadge(FThemeData theme) {
+    final source = _slip.categorySource;
+    if (source == null) return const SizedBox.shrink();
+
+    final String badgeLabel;
+    if (source == 'ai' || source == 'rule') {
+      badgeLabel = 'AI';
+    } else if (source == 'user') {
+      badgeLabel = 'You';
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(left: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: theme.colors.muted,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        badgeLabel,
+        style: theme.typography.xs.copyWith(
+          color: theme.colors.mutedForeground,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
   Widget _buildLockedField(FThemeData theme, String label, String? value) {
     if (value == null || value.isEmpty) return const SizedBox.shrink();
     return Padding(
@@ -257,6 +381,8 @@ class _SlipDetailScreenState extends State<SlipDetailScreen> {
   }
 
   Widget _buildEditableCategory(FThemeData theme) {
+    final categoryNames = ref.watch(allCategoryNamesProvider);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -264,41 +390,119 @@ class _SlipDetailScreenState extends State<SlipDetailScreen> {
             style:
                 theme.typography.sm.copyWith(fontWeight: FontWeight.w500)),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: kBuiltInCategorySlugs.map((cat) {
-            final isSelected = _editCategory == cat;
-            return GestureDetector(
-              onTap: () => setState(() => _editCategory = cat),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? theme.colors.primary
-                      : theme.colors.muted,
-                  borderRadius: theme.style.borderRadius,
-                  border: Border.all(
+        categoryNames.when(
+          data: (names) => Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: names.map((cat) {
+              final isSelected = _editCategory == cat;
+              final isBuiltIn = isBuiltInCategory(cat);
+              final label = isBuiltIn
+                  ? getCategoryLabel(cat)
+                  : cat[0].toUpperCase() + cat.substring(1);
+              return GestureDetector(
+                onTap: () => setState(() => _editCategory = cat),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
                     color: isSelected
                         ? theme.colors.primary
-                        : theme.colors.border,
+                        : theme.colors.muted,
+                    borderRadius: theme.style.borderRadius,
+                    border: Border.all(
+                      color: isSelected
+                          ? theme.colors.primary
+                          : theme.colors.border,
+                    ),
+                  ),
+                  child: Text(
+                    label,
+                    style: theme.typography.sm.copyWith(
+                      color: isSelected
+                          ? theme.colors.primaryForeground
+                          : theme.colors.foreground,
+                      fontWeight:
+                          isSelected ? FontWeight.w500 : FontWeight.normal,
+                    ),
                   ),
                 ),
-                child: Text(
-                  getCategoryLabel(cat),
-                  style: theme.typography.sm.copyWith(
+              );
+            }).toList(),
+          ),
+          loading: () => Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: kBuiltInCategorySlugs.map((cat) {
+              final isSelected = _editCategory == cat;
+              return GestureDetector(
+                onTap: () => setState(() => _editCategory = cat),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
                     color: isSelected
-                        ? theme.colors.primaryForeground
-                        : theme.colors.foreground,
-                    fontWeight:
-                        isSelected ? FontWeight.w500 : FontWeight.normal,
+                        ? theme.colors.primary
+                        : theme.colors.muted,
+                    borderRadius: theme.style.borderRadius,
+                    border: Border.all(
+                      color: isSelected
+                          ? theme.colors.primary
+                          : theme.colors.border,
+                    ),
+                  ),
+                  child: Text(
+                    getCategoryLabel(cat),
+                    style: theme.typography.sm.copyWith(
+                      color: isSelected
+                          ? theme.colors.primaryForeground
+                          : theme.colors.foreground,
+                      fontWeight:
+                          isSelected ? FontWeight.w500 : FontWeight.normal,
+                    ),
                   ),
                 ),
-              ),
-            );
-          }).toList(),
+              );
+            }).toList(),
+          ),
+          error: (_, _) => Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: kBuiltInCategorySlugs.map((cat) {
+              final isSelected = _editCategory == cat;
+              return GestureDetector(
+                onTap: () => setState(() => _editCategory = cat),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? theme.colors.primary
+                        : theme.colors.muted,
+                    borderRadius: theme.style.borderRadius,
+                    border: Border.all(
+                      color: isSelected
+                          ? theme.colors.primary
+                          : theme.colors.border,
+                    ),
+                  ),
+                  child: Text(
+                    getCategoryLabel(cat),
+                    style: theme.typography.sm.copyWith(
+                      color: isSelected
+                          ? theme.colors.primaryForeground
+                          : theme.colors.foreground,
+                      fontWeight:
+                          isSelected ? FontWeight.w500 : FontWeight.normal,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
         ),
       ],
     );
@@ -558,10 +762,16 @@ class _SlipDetailScreenState extends State<SlipDetailScreen> {
           const SizedBox(height: 16),
         ],
 
-        // Category
+        // Category with source badge
         if (_slip.category != null) ...[
           FCard(
-            title: const Text('Category'),
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Category'),
+                _buildCategorySourceBadge(theme),
+              ],
+            ),
             subtitle: Text(formatCategory(_slip.category!),
                 style: theme.typography.lg),
           ),

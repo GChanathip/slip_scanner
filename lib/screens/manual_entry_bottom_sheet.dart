@@ -3,12 +3,14 @@ import 'dart:math';
 import 'package:flutter/material.dart' show CircularProgressIndicator, Colors, DraggableScrollableSheet, showDatePicker;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/category_registry.dart';
 import '../models/payment_slip.dart';
+import '../providers/category_provider.dart';
 import '../services/database_service.dart';
 
 String _uniqueId() {
@@ -29,14 +31,14 @@ Future<bool?> showManualEntrySheet(BuildContext context) {
   );
 }
 
-class ManualEntryBottomSheet extends StatefulWidget {
+class ManualEntryBottomSheet extends ConsumerStatefulWidget {
   const ManualEntryBottomSheet({super.key});
 
   @override
-  State<ManualEntryBottomSheet> createState() => _ManualEntryBottomSheetState();
+  ConsumerState<ManualEntryBottomSheet> createState() => _ManualEntryBottomSheetState();
 }
 
-class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
+class _ManualEntryBottomSheetState extends ConsumerState<ManualEntryBottomSheet> {
   final _amountController = TextEditingController();
   final _notesController = TextEditingController();
   final _amountFocus = FocusNode();
@@ -323,6 +325,8 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
   }
 
   Widget _buildCategorySection(FThemeData theme) {
+    final categoryNames = ref.watch(allCategoryNamesProvider);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -331,19 +335,52 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
           style: theme.typography.sm.copyWith(fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: kBuiltInCategorySlugs.map((cat) {
-            final isSelected = _selectedCategory == cat;
-            return _SelectChip(
-              label:
-                  '${getCategoryEmoji(cat)} ${getCategoryLabel(cat)}',
-              selected: isSelected,
-              onTap: () => setState(() => _selectedCategory = cat),
-              theme: theme,
-            );
-          }).toList(),
+        categoryNames.when(
+          data: (names) => Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: names.map((cat) {
+              final isSelected = _selectedCategory == cat;
+              final isBuiltIn = isBuiltInCategory(cat);
+              final label = isBuiltIn
+                  ? '${getCategoryEmoji(cat)} ${getCategoryLabel(cat)}'
+                  : cat[0].toUpperCase() + cat.substring(1);
+              return _SelectChip(
+                label: label,
+                selected: isSelected,
+                onTap: () => setState(() => _selectedCategory = cat),
+                theme: theme,
+              );
+            }).toList(),
+          ),
+          loading: () => Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: kBuiltInCategorySlugs.map((cat) {
+              final isSelected = _selectedCategory == cat;
+              return _SelectChip(
+                label:
+                    '${getCategoryEmoji(cat)} ${getCategoryLabel(cat)}',
+                selected: isSelected,
+                onTap: () => setState(() => _selectedCategory = cat),
+                theme: theme,
+              );
+            }).toList(),
+          ),
+          error: (_, _) => Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: kBuiltInCategorySlugs.map((cat) {
+              final isSelected = _selectedCategory == cat;
+              return _SelectChip(
+                label:
+                    '${getCategoryEmoji(cat)} ${getCategoryLabel(cat)}',
+                selected: isSelected,
+                onTap: () => setState(() => _selectedCategory = cat),
+                theme: theme,
+              );
+            }).toList(),
+          ),
         ),
       ],
     );
