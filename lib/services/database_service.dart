@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/payment_slip.dart';
@@ -459,6 +460,55 @@ class DatabaseService {
       trend.putIfAbsent(month, () => {})[cat] = total;
     }
     return trend;
+  }
+
+  /// Get spending totals grouped by day of week (0=Sunday, 6=Saturday)
+  static Future<Map<int, double>> getDayOfWeekTotals(DateTime start, DateTime end) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT
+        CAST(strftime('%w', date) AS INTEGER) as dow,
+        SUM(amount) as total,
+        COUNT(*) as count
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+      GROUP BY strftime('%w', date)
+      ORDER BY dow ASC
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    return {for (var row in result) row['dow'] as int: (row['total'] as num).toDouble()};
+  }
+
+  /// Get spending totals for a specific period (for period-over-period comparison)
+  static Future<double> getTotalForPeriod(DateTime start, DateTime end) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT COALESCE(SUM(amount), 0) as total
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    return (result.first['total'] as num).toDouble();
+  }
+
+  /// Get average spending per category over a historical period (for anomaly detection)
+  static Future<Map<String, double>> getCategoryAverages(DateTime start, DateTime end) async {
+    final db = await database;
+    // Calculate number of months in range for monthly average
+    final result = await db.rawQuery('''
+      SELECT
+        COALESCE(category, 'uncategorized') as cat,
+        SUM(amount) as total,
+        COUNT(DISTINCT strftime('%Y-%m', date)) as months
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+      GROUP BY COALESCE(category, 'uncategorized')
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    return {
+      for (var row in result)
+        row['cat'] as String: (row['total'] as num).toDouble() / math.max(1, row['months'] as int)
+    };
   }
 
   /// Get slips that haven't been indexed in RAG
