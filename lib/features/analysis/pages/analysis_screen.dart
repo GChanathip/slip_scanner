@@ -1,19 +1,19 @@
 import 'dart:math' as math;
 
 import 'package:auto_route/auto_route.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:forui/forui.dart';
-import 'package:avers/features/budget/providers/budget_state.dart';
+import 'package:avers/core/models/category_registry.dart';
+import 'package:avers/core/utils/formatters.dart';
+import 'package:avers/features/ai/providers/cactus_provider.dart';
+import 'package:avers/features/ai/widgets/ensure_model.dart';
 import 'package:avers/features/analysis/providers/analysis_provider.dart';
 import 'package:avers/features/analysis/providers/analysis_state.dart';
 import 'package:avers/features/budget/providers/budget_provider.dart';
-import 'package:avers/features/ai/providers/cactus_provider.dart';
+import 'package:avers/features/budget/providers/budget_state.dart';
 import 'package:avers/features/extraction/providers/extraction_provider.dart';
 import 'package:avers/router/app_router.dart';
-import 'package:avers/core/models/category_registry.dart';
-import 'package:avers/features/ai/widgets/ensure_model.dart';
-import 'package:avers/core/utils/formatters.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:forui/forui.dart';
 
 const _insightIcons = <String, IconData>{
   'trending_up': FIcons.trendingUp,
@@ -61,7 +61,7 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
   void initState() {
     super.initState();
     final now = DateTime.now();
-    _startDate = DateTime(now.year, now.month, 1);
+    _startDate = DateTime(now.year, now.month);
     _endDate = now;
 
     Future.microtask(() {
@@ -74,7 +74,7 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
     await ensureModelLoaded(context, ref);
   }
 
-  void _selectDateRange() async {
+  Future<void> _selectDateRange() async {
     final result = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
@@ -118,9 +118,7 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
       ),
       child: Stack(
         children: [
-          analysisState.isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : ListView(
+          if (analysisState.isLoading) const Center(child: CircularProgressIndicator()) else ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
                     // Date Range Picker
@@ -166,7 +164,7 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
               onPress: cactusState.isModelLoaded
                   ? () => context.router.push(ChatRoute(startDate: _startDate, endDate: _endDate))
                   : null,
-              prefix: Icon(FIcons.messageCircle, size: 18),
+              prefix: const Icon(FIcons.messageCircle, size: 18),
               child: const Text('Ask AI'),
             ),
           ),
@@ -220,11 +218,11 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
     final presets = <(String, DateTime, DateTime)>[
       ('Today', DateTime(now.year, now.month, now.day), now),
       ('This Week', now.subtract(Duration(days: now.weekday - 1)), now),
-      ('This Month', DateTime(now.year, now.month, 1), now),
+      ('This Month', DateTime(now.year, now.month), now),
       ('Last 7 Days', now.subtract(const Duration(days: 7)), now),
       ('Last 30 Days', now.subtract(const Duration(days: 30)), now),
       ('Last 90 Days', now.subtract(const Duration(days: 90)), now),
-      ('This Year', DateTime(now.year, 1, 1), now),
+      ('This Year', DateTime(now.year), now),
     ];
 
     return SizedBox(
@@ -475,7 +473,7 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
       final last = entries.last.value;
       final prev = entries[entries.length - 2].value;
       if (prev > 0) {
-        final change = ((last - prev) / prev * 100);
+        final change = (last - prev) / prev * 100;
         if (change.abs() > 5) {
           trendText = change > 0 ? ' +${change.toStringAsFixed(0)}%' : ' ${change.toStringAsFixed(0)}%';
         }

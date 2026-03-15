@@ -1,8 +1,8 @@
+import 'package:avers/features/ai/providers/cactus_provider.dart';
+import 'package:avers/features/ai/widgets/model_selection_dialog.dart';
+import 'package:avers/features/extraction/providers/extraction_provider.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:avers/features/ai/providers/cactus_provider.dart';
-import 'package:avers/features/extraction/providers/extraction_provider.dart';
-import 'package:avers/features/ai/widgets/model_selection_dialog.dart';
 
 /// Ensures the AI model is loaded, showing a selection dialog if the user
 /// hasn't explicitly chosen a model yet.

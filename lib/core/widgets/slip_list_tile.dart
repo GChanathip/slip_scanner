@@ -1,9 +1,9 @@
-import 'package:flutter/material.dart';
-import 'package:forui/forui.dart';
-import 'package:intl/intl.dart';
 import 'package:avers/core/models/category_registry.dart';
 import 'package:avers/core/models/payment_slip.dart';
 import 'package:avers/core/utils/formatters.dart';
+import 'package:flutter/material.dart';
+import 'package:forui/forui.dart';
+import 'package:intl/intl.dart';
 
 class SlipListTile extends StatelessWidget {
   final PaymentSlip slip;

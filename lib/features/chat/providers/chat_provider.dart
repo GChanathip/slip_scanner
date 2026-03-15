@@ -1,14 +1,14 @@
+import 'package:avers/features/ai/services/cactus_service.dart';
+import 'package:avers/features/analysis/providers/analysis_provider.dart';
+import 'package:avers/features/analysis/services/monthly_summary_service.dart';
+import 'package:avers/features/budget/providers/budget_provider.dart';
+import 'package:avers/features/chat/providers/chat_state.dart';
+import 'package:avers/features/chat/services/chat_query_service.dart';
+import 'package:avers/features/chat/services/suggestion_chip_service.dart';
 import 'package:cactus/cactus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:avers/features/ai/services/cactus_service.dart';
-import 'package:avers/features/chat/services/chat_query_service.dart';
-import 'package:avers/features/analysis/services/monthly_summary_service.dart';
-import 'package:avers/features/chat/services/suggestion_chip_service.dart';
-import 'package:avers/features/analysis/providers/analysis_provider.dart';
-import 'package:avers/features/budget/providers/budget_provider.dart';
-import 'package:avers/features/chat/providers/chat_state.dart';
 
 part 'chat_provider.g.dart';
 

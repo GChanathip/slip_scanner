@@ -4,7 +4,6 @@ part 'custom_category.freezed.dart';
 
 @freezed
 abstract class CustomCategory with _$CustomCategory {
-  const CustomCategory._();
 
   const factory CustomCategory({
     int? id,
@@ -13,6 +12,7 @@ abstract class CustomCategory with _$CustomCategory {
     @Default('orange') String color,
     required String createdAt,
   }) = _CustomCategory;
+  const CustomCategory._();
 
   factory CustomCategory.fromMap(Map<String, dynamic> map) => CustomCategory(
         id: map['id'] as int?,

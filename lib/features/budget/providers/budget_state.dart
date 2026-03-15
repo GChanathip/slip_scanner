@@ -17,7 +17,6 @@ enum BudgetAlertLevel { normal, info, warning, danger, exceeded }
 
 @freezed
 abstract class BudgetState with _$BudgetState {
-  const BudgetState._();
 
   const factory BudgetState({
     @Default(0) double overallBudget,
@@ -27,6 +26,7 @@ abstract class BudgetState with _$BudgetState {
     @Default([]) List<BudgetAlert> alerts,
     @Default(false) bool isLoading,
   }) = _BudgetState;
+  const BudgetState._();
 
   bool get hasBudget => overallBudget > 0 || categoryBudgets.isNotEmpty;
 

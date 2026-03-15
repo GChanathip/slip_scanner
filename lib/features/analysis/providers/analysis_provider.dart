@@ -1,13 +1,14 @@
 import 'dart:convert';
+
+import 'package:avers/core/database/database_service.dart';
+import 'package:avers/core/models/payment_slip.dart';
+import 'package:avers/core/utils/formatters.dart';
+import 'package:avers/features/ai/services/cactus_service.dart';
+import 'package:avers/features/analysis/providers/analysis_state.dart';
+import 'package:avers/features/budget/services/budget_service.dart';
 import 'package:cactus/cactus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:avers/features/budget/services/budget_service.dart';
-import 'package:avers/core/database/database_service.dart';
-import 'package:avers/features/ai/services/cactus_service.dart';
-import 'package:avers/core/models/payment_slip.dart';
-import 'package:avers/core/utils/formatters.dart';
-import 'package:avers/features/analysis/providers/analysis_state.dart';
 
 part 'analysis_provider.g.dart';
 
@@ -143,13 +144,13 @@ class Analysis extends _$Analysis {
       final overallBudget = await BudgetService.getOverallBudget();
       if (overallBudget > 0) {
         final now = DateTime.now();
-        final monthStart = DateTime(now.year, now.month, 1);
+        final monthStart = DateTime(now.year, now.month);
         final monthSpent = await DatabaseService.getTotalForPeriod(monthStart, now);
         final pct = monthSpent / overallBudget * 100;
         if (pct >= 100) {
           insights.add(InsightData(
             title: 'Budget Exceeded',
-            description: 'You\'ve spent ${formatCurrencyCompact(monthSpent)} of your ${formatCurrencyCompact(overallBudget)} budget (${pct.toStringAsFixed(0)}%)',
+            description: "You've spent ${formatCurrencyCompact(monthSpent)} of your ${formatCurrencyCompact(overallBudget)} budget (${pct.toStringAsFixed(0)}%)",
             type: 'anomaly',
             value: pct,
             icon: 'alert',
@@ -203,7 +204,7 @@ class Analysis extends _$Analysis {
       if (sortedMonths.length >= 2) {
         final current = sortedMonths[0].value;
         final previous = sortedMonths[1].value;
-        final change = ((current - previous) / previous * 100);
+        final change = (current - previous) / previous * 100;
 
         if (change.abs() > 5) {
           insights.add(InsightData(
@@ -241,7 +242,7 @@ class Analysis extends _$Analysis {
         final weekendTotal = [0, 6].fold(0.0, (s, d) => s + (dowTotals[d] ?? 0));
         final allTotal = weekdayTotal + weekendTotal;
         if (allTotal > 0 && weekendTotal > 0) {
-          final weekendPct = (weekendTotal / allTotal * 100);
+          final weekendPct = weekendTotal / allTotal * 100;
           // Weekend is 2/7 = 28.6%, flag if significantly above
           if (weekendPct > 35) {
             insights.add(InsightData(
@@ -273,8 +274,8 @@ class Analysis extends _$Analysis {
     // Spending velocity
     try {
       final now = DateTime.now();
-      final currentMonthStart = DateTime(now.year, now.month, 1);
-      final lastMonthStart = DateTime(now.year, now.month - 1, 1);
+      final currentMonthStart = DateTime(now.year, now.month);
+      final lastMonthStart = DateTime(now.year, now.month - 1);
       final lastMonthEnd = DateTime(now.year, now.month, 0, 23, 59, 59);
       final dayOfMonth = now.day;
       final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
@@ -285,11 +286,11 @@ class Analysis extends _$Analysis {
       if (currentTotal > 0 && lastTotal > 0 && dayOfMonth > 3) {
         final projectedTotal = (currentTotal / dayOfMonth) * daysInMonth;
         final diff = projectedTotal - lastTotal;
-        final pct = (diff / lastTotal * 100);
+        final pct = diff / lastTotal * 100;
         if (pct.abs() > 10) {
           insights.add(InsightData(
             title: 'Spending Velocity',
-            description: 'At current rate, you\'ll spend ${formatCurrencyCompact(projectedTotal)} this month vs. ${formatCurrencyCompact(lastTotal)} last month (${pct > 0 ? '+' : ''}${pct.toStringAsFixed(0)}%)',
+            description: "At current rate, you'll spend ${formatCurrencyCompact(projectedTotal)} this month vs. ${formatCurrencyCompact(lastTotal)} last month (${pct > 0 ? '+' : ''}${pct.toStringAsFixed(0)}%)",
             type: pct > 20 ? 'anomaly' : 'trend',
             value: pct,
             icon: pct > 0 ? 'trending_up' : 'trending_down',
@@ -307,7 +308,7 @@ class Analysis extends _$Analysis {
       final topRecipients = await DatabaseService.getTopRecipients(start, end, limit: 3);
       if (topRecipients.isNotEmpty && total > 0) {
         final topTotal = topRecipients.values.fold(0.0, (s, v) => s + v);
-        final topPct = (topTotal / total * 100);
+        final topPct = topTotal / total * 100;
         if (topPct > 40) {
           insights.add(InsightData(
             title: 'Recipient Concentration',
@@ -325,14 +326,14 @@ class Analysis extends _$Analysis {
     // Category anomaly detection (spike vs. historical average)
     try {
       final now = DateTime.now();
-      final histStart = DateTime(now.year, now.month - 3, 1);
+      final histStart = DateTime(now.year, now.month - 3);
       final histEnd = DateTime(now.year, now.month, 0, 23, 59, 59);
       final historicalAvgs = await DatabaseService.getCategoryAverages(histStart, histEnd);
 
       for (final entry in categories.entries) {
         final histAvg = historicalAvgs[entry.key];
         if (histAvg != null && histAvg > 0) {
-          final spike = ((entry.value - histAvg) / histAvg * 100);
+          final spike = (entry.value - histAvg) / histAvg * 100;
           if (spike > 50) {
             insights.add(InsightData(
               title: '${formatCategory(entry.key)} Spike',
@@ -359,7 +360,8 @@ class Analysis extends _$Analysis {
   ) async {
     final total = slips.fold<double>(0, (sum, s) => sum + s.amount);
 
-    final prompt = '''Analyze these expense patterns and provide 2-3 brief, actionable insights.
+    final prompt = '''
+Analyze these expense patterns and provide 2-3 brief, actionable insights.
 
 Category spending: ${categories.entries.map((e) => '${e.key}: ${e.value.toStringAsFixed(2)} baht').join(', ')}
 Monthly totals: ${monthly.entries.map((e) => '${e.key}: ${e.value.toStringAsFixed(2)} baht').join(', ')}
@@ -393,10 +395,11 @@ Focus on actionable budget advice. Keep it brief.''';
 
       final list = jsonDecode(jsonStr) as List;
       return list.map((item) {
+        final map = item as Map<String, dynamic>;
         return InsightData(
-          title: item['title']?.toString() ?? 'Insight',
-          description: item['description']?.toString() ?? '',
-          type: item['type']?.toString() ?? 'suggestion',
+          title: (map['title'] as String?) ?? 'Insight',
+          description: (map['description'] as String?) ?? '',
+          type: (map['type'] as String?) ?? 'suggestion',
           icon: 'lightbulb',
         );
       }).toList();

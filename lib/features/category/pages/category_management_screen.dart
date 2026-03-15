@@ -1,11 +1,10 @@
 import 'package:auto_route/auto_route.dart';
-import 'package:flutter/widgets.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:forui/forui.dart';
-
 import 'package:avers/core/models/category_registry.dart';
 import 'package:avers/features/category/providers/category_provider.dart';
 import 'package:avers/features/category/widgets/category_edit_sheet.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:forui/forui.dart';
 
 @RoutePage()
 class CategoryManagementScreen extends ConsumerWidget {
@@ -450,7 +449,6 @@ class _CustomRow extends ConsumerWidget {
       context: context,
       builder: (dialogContext, style, animation) => FDialog(
         animation: animation,
-        direction: Axis.vertical,
         title: Text("Merge '${cat.name}' into '$targetLabel'?"),
         body: Text(
           "$count transactions will be moved to '$targetLabel'. '${cat.name}' will be removed.",
@@ -489,7 +487,6 @@ class _CustomRow extends ConsumerWidget {
       context: context,
       builder: (dialogContext, style, animation) => FDialog(
         animation: animation,
-        direction: Axis.vertical,
         title: Text("Delete '${cat.name}'?"),
         body: Text(
           "$count transactions will be moved to 'Other'. This can't be undone.",

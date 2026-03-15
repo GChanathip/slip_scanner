@@ -1,14 +1,15 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
+
+import 'package:avers/core/database/database_service.dart';
+import 'package:avers/core/services/extraction_notifier.dart';
+import 'package:avers/features/ai/providers/cactus_provider.dart';
 import 'package:avers/features/budget/services/budget_alert_service.dart';
 import 'package:avers/features/category/services/category_service.dart';
-import 'package:avers/core/database/database_service.dart';
-import 'package:avers/features/extraction/services/extraction_service.dart';
-import 'package:avers/core/services/extraction_notifier.dart';
-import 'package:avers/features/extraction/services/rag_queue_service.dart';
-import 'package:avers/features/ai/providers/cactus_provider.dart';
 import 'package:avers/features/extraction/providers/extraction_state.dart';
+import 'package:avers/features/extraction/services/extraction_service.dart';
+import 'package:avers/features/extraction/services/rag_queue_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'extraction_provider.g.dart';
 

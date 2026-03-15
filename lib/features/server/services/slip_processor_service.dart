@@ -1,11 +1,10 @@
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
-
-import 'package:avers/core/models/payment_slip.dart';
-import 'package:avers/core/utils/slip_conversion.dart';
 import 'package:avers/core/database/database_service.dart';
+import 'package:avers/core/models/payment_slip.dart';
 import 'package:avers/core/services/platform_service.dart';
+import 'package:avers/core/utils/slip_conversion.dart';
+import 'package:flutter/foundation.dart';
 
 /// Orchestrates the image → OCR → DB pipeline for server-side slip processing.
 /// Used by the LINE webhook handler when an image is received.

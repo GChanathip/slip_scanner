@@ -1,7 +1,7 @@
-import 'package:avers/features/chat/models/suggestion_chip.dart';
+import 'package:avers/core/utils/formatters.dart';
 import 'package:avers/features/analysis/providers/analysis_state.dart';
 import 'package:avers/features/budget/providers/budget_state.dart';
-import 'package:avers/core/utils/formatters.dart';
+import 'package:avers/features/chat/models/suggestion_chip.dart';
 
 class SuggestionChipService {
   /// Generate contextual suggestion chips (max 6, priority-ordered) from

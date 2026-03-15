@@ -1,5 +1,5 @@
-import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:avers/features/chat/models/suggestion_chip.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'chat_state.freezed.dart';
 
@@ -15,7 +15,6 @@ abstract class ChatMessageModel with _$ChatMessageModel {
 
 @freezed
 abstract class ChatState with _$ChatState {
-  const ChatState._();
 
   const factory ChatState({
     @Default([]) List<ChatMessageModel> messages,
@@ -24,6 +23,7 @@ abstract class ChatState with _$ChatState {
     DateTime? endDate,
     @Default([]) List<SuggestionChip> suggestionChips,
   }) = _ChatState;
+  const ChatState._();
 
   /// Whether the chat has any messages
   bool get hasMessages => messages.isNotEmpty;

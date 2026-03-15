@@ -1,14 +1,14 @@
 import 'package:auto_route/auto_route.dart';
-import 'package:flutter/material.dart';
-import 'package:forui/forui.dart';
-import 'package:intl/intl.dart';
-import 'package:avers/core/models/payment_slip.dart';
-import 'package:avers/router/app_router.dart';
 import 'package:avers/core/database/database_service.dart';
+import 'package:avers/core/models/payment_slip.dart';
 import 'package:avers/core/services/platform_service.dart';
 import 'package:avers/core/utils/dialogs.dart';
 import 'package:avers/core/utils/formatters.dart';
 import 'package:avers/core/widgets/slip_list_tile.dart';
+import 'package:avers/router/app_router.dart';
+import 'package:flutter/material.dart';
+import 'package:forui/forui.dart';
+import 'package:intl/intl.dart';
 
 @RoutePage()
 class MonthlyViewScreen extends StatefulWidget {
@@ -34,7 +34,7 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
   Future<void> _loadSlips() async {
     setState(() => _isLoading = true);
     final slips = await DatabaseService.getPaymentSlipsByMonth(widget.month);
-    double total = slips.fold(0, (sum, slip) => sum + slip.amount);
+    final double total = slips.fold(0, (sum, slip) => sum + slip.amount);
     setState(() {
       _slips = slips;
       _totalAmount = total;
@@ -82,7 +82,7 @@ class _MonthlyViewScreenState extends State<MonthlyViewScreen> {
                   padding: const EdgeInsets.all(24.0),
                   decoration: BoxDecoration(
                     color: theme.colors.primary.withValues(alpha: 0.1),
-                    border: Border(bottom: BorderSide(color: theme.colors.border, width: 1)),
+                    border: Border(bottom: BorderSide(color: theme.colors.border)),
                   ),
                   child: Column(
                     children: [

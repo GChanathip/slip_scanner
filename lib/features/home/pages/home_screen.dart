@@ -1,23 +1,23 @@
 import 'package:auto_route/auto_route.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:forui/forui.dart';
-import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:avers/features/analysis/models/monthly_summary.dart';
-import 'package:avers/core/models/payment_slip.dart';
-import 'package:avers/features/budget/providers/budget_provider.dart';
-import 'package:avers/features/budget/providers/budget_state.dart';
-import 'package:avers/router/app_router.dart';
 import 'package:avers/core/database/database_service.dart';
-import 'package:avers/features/analysis/services/monthly_summary_service.dart';
-import 'package:avers/features/scanning/providers/scanning_provider.dart';
-import 'package:avers/features/extraction/providers/extraction_provider.dart';
+import 'package:avers/core/models/payment_slip.dart';
 import 'package:avers/core/utils/formatters.dart';
 import 'package:avers/core/widgets/hero_card.dart';
 import 'package:avers/core/widgets/slip_list_tile.dart';
+import 'package:avers/features/analysis/models/monthly_summary.dart';
+import 'package:avers/features/analysis/services/monthly_summary_service.dart';
+import 'package:avers/features/budget/providers/budget_provider.dart';
+import 'package:avers/features/budget/providers/budget_state.dart';
+import 'package:avers/features/extraction/providers/extraction_provider.dart';
 import 'package:avers/features/home/widgets/manual_entry_bottom_sheet.dart';
+import 'package:avers/features/scanning/providers/scanning_provider.dart';
+import 'package:avers/router/app_router.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:forui/forui.dart';
+import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 @RoutePage()
 class HomeScreen extends ConsumerStatefulWidget {
@@ -266,9 +266,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       header: const FHeader(title: Text('Avers')),
       child: Stack(
         children: [
-          _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
+          if (_isLoading) const Center(child: CircularProgressIndicator()) else RefreshIndicator(
               onRefresh: () async {
                 await _loadData();
                 await _checkIfScannedBefore();
@@ -366,7 +364,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             context.router.push(MonthlyViewRoute(month: DateTime.now())).then((_) => _loadData());
                           },
                           mainAxisSize: MainAxisSize.min,
-                          suffix: Icon(FIcons.arrowRight, size: 16),
+                          suffix: const Icon(FIcons.arrowRight, size: 16),
                           child: const Text('View Details'),
                         ),
                       ),
@@ -450,7 +448,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   await _loadMonthlySummary();
                 }
               },
-              child: Icon(FIcons.plus, size: 24),
+              child: const Icon(FIcons.plus, size: 24),
             ),
           ),
         ],

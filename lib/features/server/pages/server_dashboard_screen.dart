@@ -1,17 +1,16 @@
 import 'dart:async';
 
 import 'package:auto_route/auto_route.dart';
+import 'package:avers/features/ai/providers/cactus_provider.dart';
+import 'package:avers/features/ai/providers/cactus_state.dart';
+import 'package:avers/features/ai/widgets/ensure_model.dart';
+import 'package:avers/features/extraction/providers/extraction_provider.dart';
+import 'package:avers/features/extraction/providers/extraction_state.dart';
+import 'package:avers/features/server/services/config_service.dart';
+import 'package:avers/features/server/services/server_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
-
-import 'package:avers/features/ai/providers/cactus_provider.dart';
-import 'package:avers/features/ai/providers/cactus_state.dart';
-import 'package:avers/features/extraction/providers/extraction_provider.dart';
-import 'package:avers/features/extraction/providers/extraction_state.dart';
-import 'package:avers/features/server/services/server_service.dart';
-import 'package:avers/features/server/services/config_service.dart';
-import 'package:avers/features/ai/widgets/ensure_model.dart';
 
 @RoutePage()
 class ServerDashboardScreen extends ConsumerStatefulWidget {
@@ -105,7 +104,7 @@ class _ServerDashboardScreenState extends ConsumerState<ServerDashboardScreen> {
 
   /// Ensure CactusLM is loaded and extraction queue is running.
   /// Returns true if the model is ready, false if cancelled or failed.
-  Future<bool> _ensureModelAndExtraction() async {
+  Future<bool> _ensureModelAndExtraction() {
     return ensureModelLoaded(context, ref);
   }
 
@@ -169,8 +168,8 @@ class _ServerDashboardScreenState extends ConsumerState<ServerDashboardScreen> {
     final extractionState = ref.watch(extractionQueueProvider);
 
     return FScaffold(
-      header: FHeader(
-        title: const Text('Avers Server'),
+      header: const FHeader(
+        title: Text('Avers Server'),
       ),
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -248,13 +247,11 @@ class _ServerDashboardScreenState extends ConsumerState<ServerDashboardScreen> {
               ),
             ),
             const SizedBox(width: 16),
-            _serverService.isRunning
-                ? FButton(
+            if (_serverService.isRunning) FButton(
                     onPress: _isLoading ? null : _toggleServer,
                     variant: FButtonVariant.destructive,
                     child: const Text('Stop'),
-                  )
-                : FButton(
+                  ) else FButton(
                     onPress: _isLoading ? null : _toggleServer,
                     child: Text(buttonLabel),
                   ),

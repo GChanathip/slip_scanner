@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
-import 'package:shelf/shelf.dart';
-
 import 'package:avers/features/chat/services/chat_query_service.dart';
 import 'package:avers/features/server/services/line_service.dart';
 import 'package:avers/features/server/services/slip_processor_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:shelf/shelf.dart';
 
 /// Handles incoming LINE webhook POST requests.
 class LineWebhookHandler {
@@ -47,7 +46,7 @@ class LineWebhookHandler {
     // 3. Parse webhook body
     final Map<String, dynamic> payload;
     try {
-      payload = jsonDecode(body);
+      payload = jsonDecode(body) as Map<String, dynamic>;
     } catch (e) {
       return Response(400, body: 'Invalid JSON');
     }
@@ -55,13 +54,13 @@ class LineWebhookHandler {
     // 4. Return 200 OK immediately, process events async
     final events = payload['events'] as List<dynamic>? ?? [];
     for (final event in events) {
-      unawaited(_processEvent(event));
+      unawaited(_processEvent(Map<String, dynamic>.from(event as Map)));
     }
 
     return Response.ok('OK');
   }
 
-  Future<void> _processEvent(dynamic event) async {
+  Future<void> _processEvent(Map<String, dynamic> event) async {
     try {
       final type = event['type'] as String?;
       final replyToken = event['replyToken'] as String?;
@@ -73,7 +72,7 @@ class LineWebhookHandler {
         final messageType = message?['type'] as String?;
 
         if (messageType == 'image') {
-          final messageId = message?['id']?.toString();
+          final messageId = (message?['id'] as Object?)?.toString();
           if (messageId == null) {
             debugPrint('Missing message ID');
             return;

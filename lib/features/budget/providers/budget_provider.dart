@@ -1,9 +1,9 @@
-import 'package:flutter/foundation.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:avers/features/budget/services/budget_service.dart';
 import 'package:avers/core/database/database_service.dart';
 import 'package:avers/core/services/notification_service.dart';
 import 'package:avers/features/budget/providers/budget_state.dart';
+import 'package:avers/features/budget/services/budget_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'budget_provider.g.dart';
 
@@ -21,7 +21,7 @@ class Budget extends _$Budget {
     state = state.copyWith(isLoading: true);
     try {
       final now = DateTime.now();
-      final monthStart = DateTime(now.year, now.month, 1);
+      final monthStart = DateTime(now.year, now.month);
 
       final results = await Future.wait([
         BudgetService.getOverallBudget(),
@@ -43,7 +43,6 @@ class Budget extends _$Budget {
         currentMonthSpent: currentSpent,
         currentMonthByCategory: categorySpent,
         alerts: alerts,
-        isLoading: false,
       );
     } catch (e) {
       debugPrint('Error loading budget: $e');

@@ -1,9 +1,10 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:avers/features/budget/services/budget_service.dart';
+
 import 'package:avers/core/database/database_service.dart';
 import 'package:avers/core/services/notification_service.dart';
+import 'package:avers/features/budget/services/budget_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const _kBudgetAlertsFired = 'budget_alerts_fired';
 
@@ -26,7 +27,7 @@ class BudgetAlertService {
       if (overallBudget <= 0) return; // No budget configured
 
       final now = DateTime.now();
-      final monthStart = DateTime(now.year, now.month, 1);
+      final monthStart = DateTime(now.year, now.month);
       final spent = await DatabaseService.getTotalForPeriod(monthStart, now);
       if (spent <= 0) return;
 
@@ -79,11 +80,11 @@ class BudgetAlertService {
 
     if (threshold >= 100) {
       title = 'Budget Exceeded!';
-      body = 'You\'ve spent $spentStr — your $budgetStr monthly budget is over.';
+      body = "You've spent $spentStr — your $budgetStr monthly budget is over.";
     } else {
       title = 'Budget Alert';
       body =
-          'You\'ve spent $pctStr of your $budgetStr budget ($spentStr spent).';
+          "You've spent $pctStr of your $budgetStr budget ($spentStr spent).";
     }
 
     // Use threshold as the notification ID so each level has a stable ID.

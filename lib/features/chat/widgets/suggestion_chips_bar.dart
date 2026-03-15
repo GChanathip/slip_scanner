@@ -1,6 +1,6 @@
+import 'package:avers/features/chat/models/suggestion_chip.dart' as model;
 import 'package:flutter/widgets.dart';
 import 'package:forui/forui.dart';
-import 'package:avers/features/chat/models/suggestion_chip.dart' as model;
 
 /// A horizontally scrollable row of suggestion chips rendered above the chat input.
 class SuggestionChipsBar extends StatelessWidget {

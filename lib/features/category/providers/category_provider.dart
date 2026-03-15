@@ -1,8 +1,8 @@
-import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:avers/core/database/database_service.dart';
 import 'package:avers/core/models/category_registry.dart';
 import 'package:avers/features/category/models/custom_category.dart';
 import 'package:avers/features/category/services/category_service.dart';
-import 'package:avers/core/database/database_service.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'category_provider.g.dart';
 
@@ -25,7 +25,7 @@ Future<List<BuiltInCategoryWithCount>> builtinCategoriesWithCounts(
     'WHERE category IS NOT NULL GROUP BY category',
   );
   final countMap = <String, int>{
-    for (final r in rows) r['category'] as String: r['cnt'] as int,
+    for (final r in rows) r['category']! as String: r['cnt']! as int,
   };
 
   return [
@@ -54,7 +54,7 @@ Future<List<CustomCategoryWithCount>> customCategoriesWithCounts(
     names,
   );
   final countMap = <String, int>{
-    for (final r in rows) r['category'] as String: r['cnt'] as int,
+    for (final r in rows) r['category']! as String: r['cnt']! as int,
   };
 
   return [
@@ -80,7 +80,7 @@ Future<List<String>> allCategoryNames(Ref ref) async {
 @riverpod
 class CategoryMutations extends _$CategoryMutations {
   @override
-  FutureOr<void> build() {}
+  Future<void> build() async {}
 
   /// Create or update a custom category.
   Future<void> saveCategory({

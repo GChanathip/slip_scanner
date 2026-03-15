@@ -1,7 +1,7 @@
-import 'package:sqflite/sqflite.dart';
-import 'package:avers/features/category/models/custom_category.dart';
-import 'package:avers/features/category/models/category_rule.dart';
 import 'package:avers/core/models/category_registry.dart';
+import 'package:avers/features/category/models/category_rule.dart';
+import 'package:avers/features/category/models/custom_category.dart';
+import 'package:sqflite/sqflite.dart';
 
 const _kMaxCustomCategories = 20;
 
@@ -79,7 +79,7 @@ class CategoryService {
       limit: 1,
     );
     if (rows.isEmpty) throw ArgumentError('Category $id not found');
-    final oldName = rows.first['name'] as String;
+    final oldName = rows.first['name']! as String;
     final newName = name?.trim() ?? oldName;
 
     await _db.transaction((txn) async {
@@ -118,7 +118,7 @@ class CategoryService {
       limit: 1,
     );
     if (rows.isEmpty) return;
-    final name = rows.first['name'] as String;
+    final name = rows.first['name']! as String;
 
     await _db.transaction((txn) async {
       await txn.update(
@@ -144,7 +144,7 @@ class CategoryService {
       limit: 1,
     );
     if (rows.isEmpty) throw ArgumentError('Source category $sourceId not found');
-    final sourceName = rows.first['name'] as String;
+    final sourceName = rows.first['name']! as String;
 
     await _db.transaction((txn) async {
       await txn.update(

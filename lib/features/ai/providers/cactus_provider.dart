@@ -1,7 +1,7 @@
+import 'package:avers/features/ai/providers/cactus_state.dart';
+import 'package:avers/features/ai/services/cactus_service.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:avers/features/ai/services/cactus_service.dart';
-import 'package:avers/features/ai/providers/cactus_state.dart';
 
 part 'cactus_provider.g.dart';
 

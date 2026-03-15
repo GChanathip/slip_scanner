@@ -1,10 +1,11 @@
-import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:flutter/foundation.dart';
 import 'dart:async';
-import 'package:avers/core/services/platform_service.dart';
+
 import 'package:avers/core/database/database_service.dart';
+import 'package:avers/core/services/platform_service.dart';
 import 'package:avers/core/utils/slip_conversion.dart';
 import 'package:avers/features/scanning/providers/scanning_state.dart';
+import 'package:flutter/foundation.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'scanning_provider.g.dart';
 
@@ -77,11 +78,11 @@ class Scanning extends _$Scanning {
     _progressSubscription?.cancel();
     _progressSubscription = PlatformService.getProgressStream().listen(
       (progress) {
-        final newTotal = progress['total'] ?? 0;
-        final newProcessed = progress['processed'] ?? 0;
-        final newSlipsFound = progress['slipsFound'] ?? 0;
-        final newICloudSkipped = progress['iCloudSkipped'] ?? 0;
-        final newIsComplete = progress['isComplete'] ?? false;
+        final newTotal = progress['total'] as int? ?? 0;
+        final newProcessed = progress['processed'] as int? ?? 0;
+        final newSlipsFound = progress['slipsFound'] as int? ?? 0;
+        final newICloudSkipped = progress['iCloudSkipped'] as int? ?? 0;
+        final newIsComplete = progress['isComplete'] as bool? ?? false;
 
         // Only rebuild if values actually changed
         if (newTotal != state.totalPhotos ||
@@ -117,7 +118,7 @@ class Scanning extends _$Scanning {
       (partialData) {
         final slips = partialData['slips'] as List<dynamic>? ?? [];
         if (slips.isNotEmpty) {
-          final raw = slips.map((s) => Map<String, dynamic>.from(s)).toList();
+          final raw = slips.map((s) => Map<String, dynamic>.from(s as Map)).toList();
           final future = _insertBatch(raw);
           _pendingInserts.add(future);
           future.whenComplete(() => _pendingInserts.remove(future));

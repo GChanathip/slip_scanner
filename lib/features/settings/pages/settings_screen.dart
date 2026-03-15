@@ -1,13 +1,13 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:avers/features/ai/providers/cactus_provider.dart';
+import 'package:avers/features/ai/providers/cactus_state.dart';
+import 'package:avers/features/ai/services/cactus_service.dart';
+import 'package:avers/features/extraction/providers/extraction_provider.dart';
+import 'package:avers/router/app_router.dart';
 import 'package:cactus/cactus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
-import 'package:avers/features/ai/providers/cactus_state.dart';
-import 'package:avers/features/ai/providers/cactus_provider.dart';
-import 'package:avers/features/extraction/providers/extraction_provider.dart';
-import 'package:avers/router/app_router.dart';
-import 'package:avers/features/ai/services/cactus_service.dart';
 
 @RoutePage()
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -72,7 +72,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 if (cactusState.isModelLoaded) ...[
                   Row(
                     children: [
-                      Icon(FIcons.check, color: Colors.green, size: 20),
+                      const Icon(FIcons.check, color: Colors.green, size: 20),
                       const SizedBox(width: 8),
                       Text('Current: ${cactusState.selectedModel}', style: theme.typography.base),
                     ],
@@ -221,7 +221,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
           if (isSelected && cactusState.isModelLoaded)
-            Icon(FIcons.check, color: Colors.green)
+            const Icon(FIcons.check, color: Colors.green)
           else if (isLoading)
             const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
           else

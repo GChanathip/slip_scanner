@@ -1,14 +1,14 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:avers/core/utils/formatters.dart';
+import 'package:avers/features/ai/providers/cactus_provider.dart';
+import 'package:avers/features/ai/widgets/ensure_model.dart';
+import 'package:avers/features/chat/providers/chat_provider.dart';
+import 'package:avers/features/chat/providers/chat_state.dart';
+import 'package:avers/features/chat/widgets/suggestion_chips_bar.dart';
+import 'package:avers/features/extraction/providers/extraction_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
-import 'package:avers/features/chat/providers/chat_provider.dart';
-import 'package:avers/features/chat/providers/chat_state.dart';
-import 'package:avers/features/ai/providers/cactus_provider.dart';
-import 'package:avers/features/extraction/providers/extraction_provider.dart';
-import 'package:avers/features/ai/widgets/ensure_model.dart';
-import 'package:avers/core/utils/formatters.dart';
-import 'package:avers/features/chat/widgets/suggestion_chips_bar.dart';
 
 @RoutePage()
 class ChatScreen extends ConsumerStatefulWidget {

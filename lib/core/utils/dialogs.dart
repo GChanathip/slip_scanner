@@ -6,7 +6,6 @@ Future<bool> showDeleteConfirmation(BuildContext context) async {
     context: context,
     builder: (dialogContext, style, animation) => FDialog(
       animation: animation,
-      direction: Axis.vertical,
       title: const Text('Delete Slip'),
       body: const Text('Are you sure you want to delete this payment slip?'),
       actions: [

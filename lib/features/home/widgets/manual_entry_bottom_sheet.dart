@@ -1,5 +1,9 @@
 import 'dart:math';
 
+import 'package:avers/core/database/database_service.dart';
+import 'package:avers/core/models/category_registry.dart';
+import 'package:avers/core/models/payment_slip.dart';
+import 'package:avers/features/category/providers/category_provider.dart';
 import 'package:flutter/material.dart' show CircularProgressIndicator, Colors, DraggableScrollableSheet, showDatePicker;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -7,11 +11,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import 'package:avers/core/models/category_registry.dart';
-import 'package:avers/core/models/payment_slip.dart';
-import 'package:avers/features/category/providers/category_provider.dart';
-import 'package:avers/core/database/database_service.dart';
 
 String _uniqueId() {
   final ts = DateTime.now().millisecondsSinceEpoch;
@@ -104,7 +103,6 @@ class _ManualEntryBottomSheetState extends ConsumerState<ManualEntryBottomSheet>
       context: context,
       builder: (dialogContext, style, animation) => FDialog(
         animation: animation,
-        direction: Axis.vertical,
         title: const Text('Discard this entry?'),
         body: const Text('Your unsaved expense will be lost.'),
         actions: [
@@ -200,7 +198,6 @@ class _ManualEntryBottomSheetState extends ConsumerState<ManualEntryBottomSheet>
       child: DraggableScrollableSheet(
         initialChildSize: 0.6,
         maxChildSize: 0.95,
-        minChildSize: 0.25,
         expand: false,
         builder: (context, scrollController) =>
             _buildContent(theme, scrollController),
@@ -280,7 +277,7 @@ class _ManualEntryBottomSheetState extends ConsumerState<ManualEntryBottomSheet>
             onPress: () async {
               if (await _confirmDiscard() && mounted) Navigator.pop(context);
             },
-            child: Icon(FIcons.x, size: 20),
+            child: const Icon(FIcons.x, size: 20),
           ),
         ],
       ),
@@ -297,7 +294,6 @@ class _ManualEntryBottomSheetState extends ConsumerState<ManualEntryBottomSheet>
         ),
         const SizedBox(height: 6),
         Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Text(
               '฿',
@@ -508,7 +504,6 @@ class _ManualEntryBottomSheetState extends ConsumerState<ManualEntryBottomSheet>
       ),
       child: FButton(
         onPress: _amount > 0 && !_isSaving ? _save : null,
-        mainAxisSize: MainAxisSize.max,
         child: _isSaving
             ? const SizedBox(
                 width: 20,

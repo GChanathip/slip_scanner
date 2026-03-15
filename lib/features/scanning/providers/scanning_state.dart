@@ -3,8 +3,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'scanning_state.freezed.dart';
 
 @freezed
-abstract class ScanningState with _$ScanningState {
-  const ScanningState._(); // Private constructor for custom methods
+abstract class ScanningState with _$ScanningState { // Private constructor for custom methods
 
   const factory ScanningState({
     @Default(false) bool isScanning,
@@ -15,6 +14,7 @@ abstract class ScanningState with _$ScanningState {
     @Default(false) bool isComplete,
     String? error,
   }) = _ScanningState;
+  const ScanningState._();
 
   double get progress => totalPhotos > 0 ? processedPhotos / totalPhotos : 0.0;
 }

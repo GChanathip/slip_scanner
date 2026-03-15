@@ -1,14 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:avers/features/server/routes/line_webhook.dart';
+import 'package:avers/features/server/services/config_service.dart';
+import 'package:avers/features/server/services/line_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
-
-import 'package:avers/features/server/services/config_service.dart';
-import 'package:avers/features/server/services/line_service.dart';
-import 'package:avers/features/server/routes/line_webhook.dart';
 
 /// Manages the embedded shelf HTTP server lifecycle.
 /// Singleton — the server outlives any individual screen.

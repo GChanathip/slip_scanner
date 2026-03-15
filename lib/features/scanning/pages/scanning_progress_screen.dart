@@ -1,9 +1,9 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:avers/features/scanning/providers/scanning_provider.dart';
+import 'package:avers/features/scanning/providers/scanning_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
-import 'package:avers/features/scanning/providers/scanning_provider.dart';
-import 'package:avers/features/scanning/providers/scanning_state.dart';
 
 @RoutePage()
 class ScanningProgressScreen extends ConsumerStatefulWidget {
@@ -199,7 +199,6 @@ class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen>
         animation: animation,
         title: const Text('Scanning Complete'),
         body: Text('Processed $processed photos and found $found payment slips.$skippedNote'),
-        direction: Axis.vertical,
         actions: [
           FButton(
             onPress: () {
@@ -214,7 +213,7 @@ class _ScanningProgressScreenState extends ConsumerState<ScanningProgressScreen>
     );
   }
 
-  void _cancelScanning() async {
+  Future<void> _cancelScanning() async {
     try {
       await ref.read(scanningProvider.notifier).cancelScanning();
       if (mounted) {

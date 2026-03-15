@@ -1,11 +1,10 @@
+import 'package:avers/core/database/database_service.dart';
+import 'package:avers/features/ai/services/cactus_service.dart';
+import 'package:avers/features/analysis/models/monthly_summary.dart';
+import 'package:avers/features/budget/services/budget_service.dart';
 import 'package:cactus/models/types.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import 'package:avers/features/analysis/models/monthly_summary.dart';
-import 'package:avers/features/budget/services/budget_service.dart';
-import 'package:avers/features/ai/services/cactus_service.dart';
-import 'package:avers/core/database/database_service.dart';
 
 const _kLastSummaryMonth = 'last_summary_month';
 const _kSummaryPrefix = 'monthly_summaries.';
@@ -265,7 +264,7 @@ class MonthlySummaryService {
   /// Parse "YYYY-MM" into the first moment of that month.
   static DateTime _monthStart(String monthKey) {
     final parts = monthKey.split('-');
-    return DateTime(int.parse(parts[0]), int.parse(parts[1]), 1);
+    return DateTime(int.parse(parts[0]), int.parse(parts[1]));
   }
 
   /// Parse "YYYY-MM" into the last moment of that month (23:59:59.999).
@@ -273,8 +272,8 @@ class MonthlySummaryService {
     final start = _monthStart(monthKey);
     // First day of next month minus 1 millisecond.
     final nextMonth = start.month < 12
-        ? DateTime(start.year, start.month + 1, 1)
-        : DateTime(start.year + 1, 1, 1);
+        ? DateTime(start.year, start.month + 1)
+        : DateTime(start.year + 1);
     return nextMonth.subtract(const Duration(milliseconds: 1));
   }
 }

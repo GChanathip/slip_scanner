@@ -1,10 +1,9 @@
-import 'package:flutter/widgets.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:forui/forui.dart';
-
 import 'package:avers/core/models/category_registry.dart';
 import 'package:avers/features/category/models/custom_category.dart';
 import 'package:avers/features/category/providers/category_provider.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:forui/forui.dart';
 
 /// Shows the category edit sheet. Returns the saved category name, or null if cancelled.
 Future<String?> showCategoryEditSheet(

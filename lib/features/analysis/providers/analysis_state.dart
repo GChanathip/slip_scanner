@@ -18,7 +18,6 @@ abstract class InsightData with _$InsightData {
 
 @freezed
 abstract class AnalysisState with _$AnalysisState {
-  const AnalysisState._();
 
   const factory AnalysisState({
     @Default([]) List<InsightData> insights,
@@ -38,6 +37,7 @@ abstract class AnalysisState with _$AnalysisState {
     @Default({}) Map<String, Map<String, double>> categoryTrend,
     @Default(AnalyticsView.summary) AnalyticsView activeView,
   }) = _AnalysisState;
+  const AnalysisState._();
 
   /// Whether analysis has data
   bool get hasData => transactionCount > 0;

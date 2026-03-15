@@ -4,7 +4,6 @@ part 'cactus_state.freezed.dart';
 
 @freezed
 abstract class CactusState with _$CactusState {
-  const CactusState._();
 
   const factory CactusState({
     @Default(false) bool isDownloading,
@@ -16,6 +15,7 @@ abstract class CactusState with _$CactusState {
     @Default(false) bool hasExplicitlySelectedModel,
     String? error,
   }) = _CactusState;
+  const CactusState._();
 
   /// Overall loading state (downloading or initializing)
   bool get isLoading => isDownloading || isInitializing;

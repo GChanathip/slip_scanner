@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'dart:collection';
-import 'package:flutter/foundation.dart';
+
+import 'package:avers/core/database/database_service.dart';
 import 'package:avers/core/models/payment_slip.dart';
 import 'package:avers/features/ai/services/cactus_service.dart';
-import 'package:avers/core/database/database_service.dart';
 import 'package:avers/features/extraction/services/extraction_service.dart';
+import 'package:flutter/foundation.dart';
 
 /// Task containing slip and extraction result for RAG indexing
 class _RAGTask {

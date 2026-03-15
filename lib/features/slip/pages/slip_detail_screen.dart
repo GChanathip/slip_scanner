@@ -1,18 +1,19 @@
 import 'dart:io';
 import 'dart:typed_data';
+
 import 'package:auto_route/auto_route.dart';
+import 'package:avers/core/database/database_service.dart';
+import 'package:avers/core/models/category_registry.dart';
+import 'package:avers/core/models/payment_slip.dart';
+import 'package:avers/core/services/platform_service.dart';
+import 'package:avers/core/utils/dialogs.dart';
+import 'package:avers/core/utils/formatters.dart';
+import 'package:avers/features/category/providers/category_provider.dart';
+import 'package:avers/features/category/services/category_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 import 'package:intl/intl.dart';
-import 'package:avers/core/models/payment_slip.dart';
-import 'package:avers/features/category/services/category_service.dart';
-import 'package:avers/core/database/database_service.dart';
-import 'package:avers/core/services/platform_service.dart';
-import 'package:avers/core/models/category_registry.dart';
-import 'package:avers/features/category/providers/category_provider.dart';
-import 'package:avers/core/utils/dialogs.dart';
-import 'package:avers/core/utils/formatters.dart';
 
 @RoutePage()
 class SlipDetailScreen extends ConsumerStatefulWidget {
@@ -87,7 +88,6 @@ class _SlipDetailScreenState extends ConsumerState<SlipDetailScreen> {
         context: context,
         builder: (dialogContext, style, animation) => FDialog(
           animation: animation,
-          direction: Axis.vertical,
           title: const Text('Discard changes?'),
           body: const Text('Your edits will not be saved.'),
           actions: [
@@ -523,7 +523,6 @@ class _SlipDetailScreenState extends ConsumerState<SlipDetailScreen> {
                   .copyWith(fontWeight: FontWeight.w500)),
           const SizedBox(height: 4),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text('฿',
                   style: theme.typography.xl2
@@ -633,7 +632,6 @@ class _SlipDetailScreenState extends ConsumerState<SlipDetailScreen> {
         // Save button
         FButton(
           onPress: _isSaving ? null : _save,
-          mainAxisSize: MainAxisSize.max,
           child: _isSaving
               ? const SizedBox(
                   width: 20,
@@ -874,7 +872,7 @@ class _SlipDetailScreenState extends ConsumerState<SlipDetailScreen> {
         FButton(
           variant: FButtonVariant.destructive,
           onPress: () => _deleteSlip(context),
-          prefix: Icon(FIcons.trash2, size: 16),
+          prefix: const Icon(FIcons.trash2, size: 16),
           child: const Text('Delete Slip'),
         ),
         const SizedBox(height: 16),
@@ -892,7 +890,7 @@ class _SlipDetailScreenState extends ConsumerState<SlipDetailScreen> {
         prefixes: [
           if (_isEditing)
             FHeaderAction(
-              icon: Icon(FIcons.x),
+              icon: const Icon(FIcons.x),
               onPress: _cancelEdit,
             )
           else
@@ -902,7 +900,7 @@ class _SlipDetailScreenState extends ConsumerState<SlipDetailScreen> {
         suffixes: [
           if (!_isEditing)
             FHeaderAction(
-              icon: Icon(FIcons.pencil),
+              icon: const Icon(FIcons.pencil),
               onPress: _enterEditMode,
             ),
         ],

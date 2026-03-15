@@ -1,7 +1,7 @@
+import 'package:avers/features/ai/services/cactus_service.dart';
 import 'package:cactus/cactus.dart';
 import 'package:flutter/widgets.dart';
 import 'package:forui/forui.dart';
-import 'package:avers/features/ai/services/cactus_service.dart';
 
 /// Shows a dialog for the user to select an AI model.
 /// Returns the selected model slug, or null if cancelled.
@@ -13,7 +13,6 @@ Future<String?> showModelSelectionDialog(BuildContext context) async {
     context: context,
     builder: (dialogContext, style, animation) => FDialog(
       animation: animation,
-      direction: Axis.vertical,
       title: const Text('Select AI Model'),
       body: _ModelList(
         models: models,
@@ -22,7 +21,7 @@ Future<String?> showModelSelectionDialog(BuildContext context) async {
       actions: [
         FButton(
           variant: FButtonVariant.outline,
-          onPress: () => Navigator.pop(dialogContext, null),
+          onPress: () => Navigator.pop(dialogContext),
           child: const Text('Cancel'),
         ),
       ],

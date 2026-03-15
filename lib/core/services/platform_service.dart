@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 
 class PlatformService {
+  PlatformService._();
   static const MethodChannel _channel = MethodChannel('com.avers.app/vision');
   static const MethodChannel _progressChannel = MethodChannel('com.avers.app/progress');
 
@@ -27,7 +28,7 @@ class PlatformService {
   static Future<Map<String, dynamic>> scanAllPhotos() async {
     try {
       final result = await _channel.invokeMethod('scanAllPhotos');
-      return Map<String, dynamic>.from(result);
+      return Map<String, dynamic>.from(result as Map);
     } on PlatformException catch (e) {
       throw Exception('Failed to scan all photos: ${e.message}');
     }
@@ -36,7 +37,7 @@ class PlatformService {
   static Future<bool> cancelScanning() async {
     try {
       final result = await _channel.invokeMethod('cancelScanning');
-      return result;
+      return result as bool;
     } on PlatformException catch (e) {
       throw Exception('Failed to cancel scanning: ${e.message}');
     }
@@ -45,7 +46,7 @@ class PlatformService {
   static Future<List<String>> getProcessedPhotoIds() async {
     try {
       final result = await _channel.invokeMethod('getProcessedPhotoIds');
-      return List<String>.from(result);
+      return List<String>.from(result as List);
     } on PlatformException catch (e) {
       throw Exception('Failed to get processed photo IDs: ${e.message}');
     }
@@ -57,11 +58,11 @@ class PlatformService {
 
       _progressChannel.setMethodCallHandler((call) async {
         if (call.method == 'onProgress') {
-          final progress = Map<String, dynamic>.from(call.arguments);
+          final progress = Map<String, dynamic>.from(call.arguments as Map);
           // No throttling - pass through every update immediately
           _progressController?.add(progress);
         } else if (call.method == 'onPartialResults') {
-          final partialData = Map<String, dynamic>.from(call.arguments);
+          final partialData = Map<String, dynamic>.from(call.arguments as Map);
           _partialResultsController?.add(partialData);
         }
       });
@@ -96,7 +97,7 @@ class PlatformService {
         'imageData': imageData,
       });
       if (result == null) return null;
-      return Map<String, dynamic>.from(result);
+      return Map<String, dynamic>.from(result as Map);
     } on PlatformException catch (e) {
       throw Exception('Failed to process image data: ${e.message}');
     }
@@ -107,7 +108,7 @@ class PlatformService {
       final result = await _channel.invokeMethod('scanPaymentSlip', {
         'imagePath': imagePath,
       });
-      return Map<String, dynamic>.from(result);
+      return Map<String, dynamic>.from(result as Map);
     } on PlatformException catch (e) {
       throw Exception('Failed to scan payment slip: ${e.message}');
     }
@@ -118,7 +119,7 @@ class PlatformService {
       final result = await _channel.invokeMethod('deleteSlipImage', {
         'imagePath': imagePath,
       });
-      return result;
+      return result as bool;
     } on PlatformException catch (e) {
       throw Exception('Failed to delete slip image: ${e.message}');
     }

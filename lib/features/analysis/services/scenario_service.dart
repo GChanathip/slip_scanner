@@ -1,5 +1,5 @@
-import 'package:avers/features/analysis/models/what_if_scenario.dart';
 import 'package:avers/core/database/database_service.dart';
+import 'package:avers/features/analysis/models/what_if_scenario.dart';
 
 class ScenarioService {
   /// Compute what-if spending projections for the top spending categories.
@@ -7,7 +7,7 @@ class ScenarioService {
   /// Uses 3-month rolling category averages. Returns scenarios sorted by
   /// [currentMonthlyAvg] descending (highest spenders first).
   static Future<List<WhatIfScenario>> generateScenarios() async {
-    final averages = await DatabaseService.getCategoryMonthlyAverages(months: 3);
+    final averages = await DatabaseService.getCategoryMonthlyAverages();
     if (averages.isEmpty) return [];
 
     final scenarios = averages.entries

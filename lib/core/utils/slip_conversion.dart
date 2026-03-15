@@ -62,12 +62,12 @@ DateTime? parseThaiDate(String dateStr) {
 /// Must be a top-level function for `compute()` isolate compatibility.
 List<PaymentSlip> convertSlipsInIsolate(List<dynamic> slips) {
   return slips.map((slip) {
-    final slipData = Map<String, dynamic>.from(slip);
+    final slipData = Map<String, dynamic>.from(slip as Map);
 
     // Parse date
     DateTime slipDate = DateTime.now();
-    if (slipData['date'] != null && slipData['date'].toString().isNotEmpty) {
-      slipDate = parseThaiDate(slipData['date']) ?? DateTime.now();
+    if (slipData['date'] != null && (slipData['date'] as String).isNotEmpty) {
+      slipDate = parseThaiDate(slipData['date'] as String) ?? DateTime.now();
     }
 
     // Parse amount
@@ -83,11 +83,11 @@ List<PaymentSlip> convertSlipsInIsolate(List<dynamic> slips) {
     }
 
     return PaymentSlip(
-      imagePath: slipData['assetId'] ?? '',
-      assetId: slipData['assetId'],
+      imagePath: (slipData['assetId'] as String?) ?? '',
+      assetId: slipData['assetId'] as String?,
       amount: amount,
       date: slipDate,
-      extractedText: slipData['text'] ?? '',
+      extractedText: (slipData['text'] as String?) ?? '',
       createdAt: DateTime.now(),
       recipientName: nonEmpty(slipData['receiverName']),
       senderName: nonEmpty(slipData['senderName']),

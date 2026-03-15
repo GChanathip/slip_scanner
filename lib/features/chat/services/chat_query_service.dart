@@ -1,12 +1,11 @@
 import 'dart:async';
 
+import 'package:avers/core/database/database_service.dart';
+import 'package:avers/features/ai/services/cactus_service.dart';
+import 'package:avers/features/analysis/services/scenario_service.dart';
+import 'package:avers/features/budget/services/budget_service.dart';
 import 'package:cactus/cactus.dart';
 import 'package:flutter/foundation.dart';
-
-import 'package:avers/features/budget/services/budget_service.dart';
-import 'package:avers/features/ai/services/cactus_service.dart';
-import 'package:avers/core/database/database_service.dart';
-import 'package:avers/features/analysis/services/scenario_service.dart';
 
 const _dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -24,7 +23,8 @@ class ChatQueryService {
         ? '${startDate.toIso8601String().split('T')[0]} to ${endDate.toIso8601String().split('T')[0]}'
         : 'all time';
 
-    return '''You are a helpful expense tracking assistant for a Thai banking slip scanner app.
+    return '''
+You are a helpful expense tracking assistant for a Thai banking slip scanner app.
 You help users understand their spending patterns and provide financial insights.
 
 Current date range filter: $dateRangeStr
@@ -103,8 +103,8 @@ Guidelines:
       // Spending velocity (current month vs. last month projection)
       try {
         final now = DateTime.now();
-        final currentMonthStart = DateTime(now.year, now.month, 1);
-        final lastMonthStart = DateTime(now.year, now.month - 1, 1);
+        final currentMonthStart = DateTime(now.year, now.month);
+        final lastMonthStart = DateTime(now.year, now.month - 1);
         final lastMonthEnd = DateTime(now.year, now.month, 0, 23, 59, 59);
         final dayOfMonth = now.day;
         final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
@@ -147,10 +147,10 @@ Guidelines:
         final overallBudget = await BudgetService.getOverallBudget();
         if (overallBudget > 0) {
           final now = DateTime.now();
-          final monthStart = DateTime(now.year, now.month, 1);
+          final monthStart = DateTime(now.year, now.month);
           final monthSpent = await DatabaseService.getTotalForPeriod(monthStart, now);
           final remaining = overallBudget - monthSpent;
-          final pct = (monthSpent / overallBudget * 100);
+          final pct = monthSpent / overallBudget * 100;
           buffer.writeln('\nBudget tracking:');
           buffer.writeln('- Monthly budget: ${overallBudget.toStringAsFixed(0)} baht');
           buffer.writeln('- Spent this month: ${monthSpent.toStringAsFixed(0)} baht (${pct.toStringAsFixed(0)}%)');

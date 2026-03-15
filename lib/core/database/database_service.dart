@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
+
 import 'package:avers/core/models/payment_slip.dart';
 import 'package:avers/core/services/extraction_notifier.dart';
+import 'package:flutter/foundation.dart';
+import 'package:path/path.dart';
+import 'package:sqflite/sqflite.dart';
 
 class DatabaseService {
+  DatabaseService._();
   static Database? _database;
   static Completer<Database>? _initCompleter;
 
@@ -25,7 +28,7 @@ class DatabaseService {
   }
 
   static Future<Database> _initDatabase() async {
-    String path = join(await getDatabasesPath(), 'payment_slips.db');
+    final String path = join(await getDatabasesPath(), 'payment_slips.db');
     return await openDatabase(
       path,
       version: 8,
@@ -216,8 +219,8 @@ class DatabaseService {
           whereArgs: assetIdsToCheck,
         );
         
-        existingAssetIds.addAll(existingResult.map((row) => row['assetId'] as String));
-        print('🗃️ DEBUG: Found ${existingAssetIds.length} existing assetIds out of ${assetIdsToCheck.length} to check');
+        existingAssetIds.addAll(existingResult.map((row) => row['assetId']! as String));
+        debugPrint('🗃️ DEBUG: Found ${existingAssetIds.length} existing assetIds out of ${assetIdsToCheck.length} to check');
       }
       
       // Use transaction for atomicity
@@ -244,7 +247,7 @@ class DatabaseService {
         // Get inserted IDs for notification
         final results = await batch.commit();
         insertedIds = results.whereType<int>().toList();
-        print('🗃️ DEBUG: Batch insert completed - inserted: $insertCount, skipped: $skipCount');
+        debugPrint('🗃️ DEBUG: Batch insert completed - inserted: $insertCount, skipped: $skipCount');
       });
 
       // Notify extraction queue that new slips are available (event-driven)
@@ -253,7 +256,7 @@ class DatabaseService {
       }
       
     } catch (e) {
-      print('❌ ERROR: Database batch insert failed: $e');
+      debugPrint('❌ ERROR: Database batch insert failed: $e');
       rethrow; // Re-throw to let caller handle the error
     }
   }
@@ -266,7 +269,7 @@ class DatabaseService {
       where: 'assetId IS NOT NULL',
     );
     
-    return result.map((row) => row['assetId'] as String).toList();
+    return result.map((row) => row['assetId']! as String).toList();
   }
 
   static Future<List<PaymentSlip>> getPaymentSlips() async {
@@ -278,14 +281,14 @@ class DatabaseService {
       );
       return maps.map(PaymentSlip.fromMap).toList();
     } catch (e) {
-      print('❌ ERROR: Failed to get payment slips: $e');
+      debugPrint('❌ ERROR: Failed to get payment slips: $e');
       return []; // Return empty list on error
     }
   }
 
   static Future<List<PaymentSlip>> getPaymentSlipsByMonth(DateTime month) async {
     final db = await database;
-    final startOfMonth = DateTime(month.year, month.month, 1);
+    final startOfMonth = DateTime(month.year, month.month);
     final endOfMonth = DateTime(month.year, month.month + 1, 0, 23, 59, 59);
     
     final List<Map<String, dynamic>> maps = await db.query(
@@ -310,13 +313,13 @@ class DatabaseService {
         ORDER BY month DESC
       ''');
       
-      Map<String, double> monthlyTotals = {};
-      for (var row in result) {
-        monthlyTotals[row['month']] = row['total'];
+      final Map<String, double> monthlyTotals = {};
+      for (final row in result) {
+        monthlyTotals[row['month'] as String] = (row['total'] as num).toDouble();
       }
       return monthlyTotals;
     } catch (e) {
-      print('❌ ERROR: Failed to get monthly totals: $e');
+      debugPrint('❌ ERROR: Failed to get monthly totals: $e');
       return {}; // Return empty map on error
     }
   }
@@ -352,7 +355,7 @@ class DatabaseService {
       'SELECT COUNT(*) as count FROM payment_slips WHERE llmProcessingStatus = ?',
       [status],
     );
-    return result.first['count'] as int;
+    return result.first['count']! as int;
   }
 
   /// Update LLM processing status
@@ -494,7 +497,7 @@ class DatabaseService {
       ORDER BY day ASC
     ''', [start.toIso8601String(), end.toIso8601String()]);
 
-    return {for (var row in result) row['day'] as String: (row['total'] as num).toDouble()};
+    return {for (final row in result) row['day']! as String: (row['total']! as num).toDouble()};
   }
 
   /// Get weekly spending totals within a date range (ISO week)
@@ -511,7 +514,7 @@ class DatabaseService {
       ORDER BY week ASC
     ''', [start.toIso8601String(), end.toIso8601String()]);
 
-    return {for (var row in result) row['week'] as String: (row['total'] as num).toDouble()};
+    return {for (final row in result) row['week']! as String: (row['total']! as num).toDouble()};
   }
 
   /// Get yearly spending totals
@@ -526,7 +529,7 @@ class DatabaseService {
       ORDER BY year ASC
     ''');
 
-    return {for (var row in result) row['year'] as String: (row['total'] as num).toDouble()};
+    return {for (final row in result) row['year']! as String: (row['total']! as num).toDouble()};
   }
 
   /// Get top recipients by total spending within a date range
@@ -545,7 +548,7 @@ class DatabaseService {
       LIMIT ?
     ''', [start.toIso8601String(), end.toIso8601String(), limit]);
 
-    return {for (var row in result) row['recipient'] as String: (row['total'] as num).toDouble()};
+    return {for (final row in result) row['recipient']! as String: (row['total']! as num).toDouble()};
   }
 
   /// Get category spending trend by month within a date range
@@ -564,9 +567,9 @@ class DatabaseService {
 
     final trend = <String, Map<String, double>>{};
     for (final row in result) {
-      final month = row['month'] as String;
-      final cat = row['cat'] as String;
-      final total = (row['total'] as num).toDouble();
+      final month = row['month']! as String;
+      final cat = row['cat']! as String;
+      final total = (row['total']! as num).toDouble();
       trend.putIfAbsent(month, () => {})[cat] = total;
     }
     return trend;
@@ -586,7 +589,7 @@ class DatabaseService {
       ORDER BY dow ASC
     ''', [start.toIso8601String(), end.toIso8601String()]);
 
-    return {for (var row in result) row['dow'] as int: (row['total'] as num).toDouble()};
+    return {for (final row in result) row['dow']! as int: (row['total']! as num).toDouble()};
   }
 
   /// Get spending totals for a specific period (for period-over-period comparison)
@@ -598,7 +601,7 @@ class DatabaseService {
       WHERE date >= ? AND date <= ?
     ''', [start.toIso8601String(), end.toIso8601String()]);
 
-    return (result.first['total'] as num).toDouble();
+    return (result.first['total']! as num).toDouble();
   }
 
   /// Get average spending per category over a historical period (for anomaly detection)
@@ -616,8 +619,8 @@ class DatabaseService {
     ''', [start.toIso8601String(), end.toIso8601String()]);
 
     return {
-      for (var row in result)
-        row['cat'] as String: (row['total'] as num).toDouble() / math.max(1, row['months'] as int)
+      for (final row in result)
+        row['cat']! as String: (row['total']! as num).toDouble() / math.max(1, row['months']! as int)
     };
   }
 
@@ -640,7 +643,7 @@ class DatabaseService {
 
     return {
       for (final row in result)
-        row['category'] as String: (row['avg'] as num).toDouble()
+        row['category']! as String: (row['avg']! as num).toDouble()
     };
   }
 

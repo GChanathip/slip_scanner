@@ -4,7 +4,6 @@ part 'extraction_state.freezed.dart';
 
 @freezed
 abstract class ExtractionQueueState with _$ExtractionQueueState {
-  const ExtractionQueueState._();
 
   const factory ExtractionQueueState({
     @Default(0) int pendingCount,
@@ -14,6 +13,7 @@ abstract class ExtractionQueueState with _$ExtractionQueueState {
     @Default(false) bool isProcessing,
     int? currentSlipId,
   }) = _ExtractionQueueState;
+  const ExtractionQueueState._();
 
   /// Whether there are pending items to process
   bool get hasPending => pendingCount > 0;

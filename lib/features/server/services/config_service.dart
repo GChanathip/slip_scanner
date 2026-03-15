@@ -12,7 +12,7 @@ class ConfigService {
   static const _keyLineChannelSecret = 'line_channel_secret';
   static const _keyServerPort = 'server_port';
 
-  static Future<String?> getLineChannelToken() async {
+  static Future<String?> getLineChannelToken() {
     return _storage.read(key: _keyLineChannelToken);
   }
 
@@ -20,7 +20,7 @@ class ConfigService {
     await _storage.write(key: _keyLineChannelToken, value: token);
   }
 
-  static Future<String?> getLineChannelSecret() async {
+  static Future<String?> getLineChannelSecret() {
     return _storage.read(key: _keyLineChannelSecret);
   }
 

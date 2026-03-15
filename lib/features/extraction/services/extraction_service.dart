@@ -1,10 +1,11 @@
 import 'dart:convert';
-import 'package:cactus/cactus.dart';
-import 'package:cactus/models/types.dart';
-import 'package:flutter/foundation.dart';
+
 import 'package:avers/core/models/category_registry.dart';
 import 'package:avers/features/ai/services/cactus_service.dart';
 import 'package:avers/features/category/services/category_service.dart';
+import 'package:cactus/cactus.dart';
+import 'package:cactus/models/types.dart';
+import 'package:flutter/foundation.dart';
 
 /// Result of LLM extraction from slip text
 class ExtractionResult {
@@ -22,14 +23,16 @@ class ExtractionResult {
 
 /// Service for extracting structured data from OCR text using LLM
 class ExtractionService {
-  static const _systemPromptPrefix = '''You are analyzing Thai banking payment slip text.
+  static const _systemPromptPrefix = '''
+You are analyzing Thai banking payment slip text.
 Extract the following information and respond in JSON format only:
 {
   "recipientName": "recipient's name (who received the money) or null if not found",
   "notes": "any payment notes/memo/reference or null if not found",
   "category": "one of: ''';
 
-  static const _systemPromptSuffix = '''"
+  static const _systemPromptSuffix = '''
+"
 }
 
 Rules:
