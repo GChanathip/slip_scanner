@@ -2,14 +2,13 @@ import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
-import '../providers/analysis_provider.dart';
-import '../providers/budget_provider.dart';
 import '../providers/chat_provider.dart';
 import '../providers/chat_state.dart';
 import '../providers/cactus_provider.dart';
 import '../providers/extraction_provider.dart';
 import '../utils/ensure_model.dart';
 import '../utils/formatters.dart';
+import '../widgets/suggestion_chips_bar.dart';
 
 @RoutePage()
 class ChatScreen extends ConsumerStatefulWidget {
@@ -31,12 +30,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    // Set date range if provided
-    if (widget.startDate != null || widget.endDate != null) {
-      Future.microtask(() {
-        ref.read(chatProvider.notifier).setDateRange(widget.startDate, widget.endDate);
-      });
-    }
+    // Set date range if provided; always load suggestion chips
+    Future.microtask(() {
+      final notifier = ref.read(chatProvider.notifier);
+      if (widget.startDate != null || widget.endDate != null) {
+        notifier.setDateRange(widget.startDate, widget.endDate);
+      } else {
+        notifier.loadSuggestionChips();
+      }
+    });
     // Ref-counted pause: extraction yields while chat is active (avoids LLM lock contention).
     // resumeExtraction() in dispose() is always called regardless of how the screen exits.
     Future.microtask(() {
@@ -163,6 +165,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   ),
           ),
 
+          // Suggestion chips bar — hidden while generating
+          if (!chatState.isGenerating && chatState.suggestionChips.isNotEmpty)
+            Container(
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: theme.colors.border)),
+              ),
+              child: SuggestionChipsBar(
+                chips: chatState.suggestionChips,
+                onChipTap: (chip) {
+                  ref.read(chatProvider.notifier).sendMessage(chip.query);
+                  _scrollToBottom();
+                },
+              ),
+            ),
+
           // Input area
           Container(
             padding: const EdgeInsets.all(16),
@@ -197,43 +214,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
-  List<String> _buildSmartSuggestions() {
-    final suggestions = <String>[];
-    final analysisState = ref.read(analysisProvider);
-    final budgetState = ref.read(budgetProvider);
-
-    // Budget-aware suggestions
-    if (budgetState.hasBudget) {
-      if (budgetState.overallPercentage > 75) {
-        suggestions.add("I'm over budget — where can I cut back?");
-      } else {
-        suggestions.add("How's my budget looking this month?");
-      }
-    }
-
-    // Category-aware suggestion
-    final topCat = analysisState.topCategory;
-    if (topCat != null) {
-      suggestions.add('If I cut ${formatCategory(topCat)} by 20%, how much do I save per year?');
-    }
-
-    // Recipient-aware suggestion
-    if (analysisState.topRecipients.isNotEmpty) {
-      suggestions.add('Who are my top recipients this month?');
-    }
-
-    // Always available suggestions
-    suggestions.addAll([
-      'Give me a monthly spending summary',
-      'What are my spending patterns by day of week?',
-      'Any unusual spending lately?',
-    ]);
-
-    return suggestions.take(4).toList();
-  }
-
   Widget _buildEmptyState(FThemeData theme) {
-    final suggestions = _buildSmartSuggestions();
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -247,26 +228,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 24),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            alignment: WrapAlignment.center,
-            children: suggestions.map((s) => _buildSuggestionChip(s)).toList(),
-          ),
         ],
       ),
-    );
-  }
-
-  Widget _buildSuggestionChip(String text) {
-    return FButton(
-      variant: FButtonVariant.outline,
-      onPress: () {
-        _messageController.text = text;
-        _sendMessage();
-      },
-      child: Text(text),
     );
   }
 

@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import '../models/suggestion_chip.dart';
 
 part 'chat_state.freezed.dart';
 
@@ -21,6 +22,7 @@ abstract class ChatState with _$ChatState {
     @Default(false) bool isGenerating,
     DateTime? startDate,
     DateTime? endDate,
+    @Default([]) List<SuggestionChip> suggestionChips,
   }) = _ChatState;
 
   /// Whether the chat has any messages

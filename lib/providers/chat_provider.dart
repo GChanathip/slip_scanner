@@ -3,6 +3,9 @@ import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../services/cactus_service.dart';
 import '../services/chat_query_service.dart';
+import '../services/suggestion_chip_service.dart';
+import 'analysis_provider.dart';
+import 'budget_provider.dart';
 import 'chat_state.dart';
 
 part 'chat_provider.g.dart';
@@ -12,9 +15,18 @@ class Chat extends _$Chat {
   @override
   ChatState build() => const ChatState();
 
+  /// Load contextual suggestion chips from analysis + budget state.
+  void loadSuggestionChips() {
+    final analysis = ref.read(analysisProvider);
+    final budget = ref.read(budgetProvider);
+    final chips = SuggestionChipService.generate(analysis, budget);
+    state = state.copyWith(suggestionChips: chips);
+  }
+
   /// Set date range filter for analysis
   void setDateRange(DateTime? start, DateTime? end) {
     state = state.copyWith(startDate: start, endDate: end);
+    loadSuggestionChips();
   }
 
   /// Send a message and get AI response
