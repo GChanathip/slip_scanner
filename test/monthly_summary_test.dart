@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:avers/models/monthly_summary.dart';
+import 'package:avers/features/analysis/models/monthly_summary.dart';
 
 void main() {
   group('MonthlySummary', () {

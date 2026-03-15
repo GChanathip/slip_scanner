@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:avers/providers/budget_provider.dart';
-import 'package:avers/providers/budget_state.dart';
+import 'package:avers/features/budget/providers/budget_provider.dart';
+import 'package:avers/features/budget/providers/budget_state.dart';
 
 void main() {
   group('BudgetProvider', () {

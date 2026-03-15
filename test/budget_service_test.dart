@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:avers/services/budget_service.dart';
+import 'package:avers/features/budget/services/budget_service.dart';
 
 void main() {
   group('BudgetService', () {

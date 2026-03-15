@@ -1,12 +1,12 @@
 import 'dart:io' show Platform;
 
 import 'package:auto_route/auto_route.dart';
+import 'package:avers/core/services/notification_service.dart';
+import 'package:avers/router/app_router.dart';
+import 'package:cactus/cactus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
-import 'package:cactus/cactus.dart';
-import 'router/app_router.dart';
-import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,7 +35,6 @@ class _MyAppState extends State<MyApp> {
       supportedLocales: FLocalizations.supportedLocales,
       theme: FThemes.zinc.light.toApproximateMaterialTheme(),
       darkTheme: FThemes.zinc.dark.toApproximateMaterialTheme(),
-      themeMode: ThemeMode.system,
       builder: (context, child) {
         final brightness = MediaQuery.platformBrightnessOf(context);
         final theme = brightness == Brightness.dark ? FThemes.zinc.dark : FThemes.zinc.light;

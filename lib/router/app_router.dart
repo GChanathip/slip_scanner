@@ -1,16 +1,15 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:avers/core/models/payment_slip.dart';
+import 'package:avers/features/analysis/pages/analysis_screen.dart';
+import 'package:avers/features/category/pages/category_management_screen.dart';
+import 'package:avers/features/chat/pages/chat_screen.dart';
+import 'package:avers/features/home/pages/home_screen.dart';
+import 'package:avers/features/scanning/pages/scanning_progress_screen.dart';
+import 'package:avers/features/server/pages/server_dashboard_screen.dart';
+import 'package:avers/features/settings/pages/settings_screen.dart';
+import 'package:avers/features/slip/pages/monthly_view_screen.dart';
+import 'package:avers/features/slip/pages/slip_detail_screen.dart';
 import 'package:flutter/material.dart';
-
-import '../models/payment_slip.dart';
-import '../screens/home_screen.dart';
-import '../screens/monthly_view_screen.dart';
-import '../screens/scanning_progress_screen.dart';
-import '../screens/slip_detail_screen.dart';
-import '../screens/analysis_screen.dart';
-import '../screens/chat_screen.dart';
-import '../screens/server_dashboard_screen.dart';
-import '../screens/settings_screen.dart';
-import '../screens/category_management_screen.dart';
 
 part 'app_router.gr.dart';
 
@@ -32,4 +31,3 @@ class AppRouter extends RootStackRouter {
         AutoRoute(page: ServerDashboardRoute.page),
       ];
 }
-

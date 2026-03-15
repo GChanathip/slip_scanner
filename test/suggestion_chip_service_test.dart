@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:avers/providers/analysis_state.dart';
-import 'package:avers/providers/budget_state.dart';
-import 'package:avers/services/suggestion_chip_service.dart';
+import 'package:avers/features/analysis/providers/analysis_state.dart';
+import 'package:avers/features/budget/providers/budget_state.dart';
+import 'package:avers/features/chat/services/suggestion_chip_service.dart';
 
 void main() {
   group('SuggestionChipService.generate', () {

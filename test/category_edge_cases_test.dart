@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:avers/services/category_service.dart';
+import 'package:avers/features/category/services/category_service.dart';
 
 Future<Database> _openTestDb() async {
   final db = await databaseFactoryFfi.openDatabase(
