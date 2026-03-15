@@ -12,10 +12,10 @@ class BankPatternRegistry {
         .dime: DimePatterns.patternSet,
         .ktb: KTBPatterns.patternSet,
         .gsb: GSBPatterns.patternSet,
+        .ttb: TTBPatterns.patternSet,
         // Future banks:
         // .bay: BAYPatterns.patternSet,
         // .bbl: BBLPatterns.patternSet,
-        // .ttb: TTBPatterns.patternSet,
     ]
 
     /// Look up patterns for a bank type. Returns nil for .unknown or unregistered banks.
