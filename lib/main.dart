@@ -6,9 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 import 'package:cactus/cactus.dart';
 import 'router/app_router.dart';
+import 'services/notification_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   CactusConfig.setTelemetryToken('f048d96d-ab22-41ed-b5c1-8226b3300315');
+  await NotificationService.instance.initialize();
   runApp(const ProviderScope(child: MyApp()));
 }
 

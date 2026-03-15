@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import '../services/budget_alert_service.dart';
 import '../services/database_service.dart';
 import '../services/extraction_service.dart';
 import '../services/extraction_notifier.dart';
@@ -178,6 +179,9 @@ class ExtractionQueue extends _$ExtractionQueue {
 
       // Fire-and-forget RAG indexing (doesn't block next extraction!)
       RAGQueueService.instance.enqueue(slip, result);
+
+      // Fire-and-forget budget threshold check
+      BudgetAlertService.instance.checkThresholds();
 
       // Update counts
       final pending = await DatabaseService.countSlipsWithStatus('pending');

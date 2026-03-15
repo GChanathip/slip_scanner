@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../services/budget_service.dart';
 import '../services/database_service.dart';
+import '../services/notification_service.dart';
 import 'budget_state.dart';
 
 part 'budget_provider.g.dart';
@@ -52,7 +53,12 @@ class Budget extends _$Budget {
 
   /// Set overall monthly budget
   Future<void> setOverallBudget(double amount) async {
+    final wasUnset = state.overallBudget <= 0;
     await BudgetService.setOverallBudget(amount);
+    if (wasUnset && amount > 0) {
+      // First time a budget is set — request notification permission
+      await NotificationService.instance.requestPermission();
+    }
     await loadBudget();
   }
 
