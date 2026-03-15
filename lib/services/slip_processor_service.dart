@@ -60,8 +60,14 @@ class SlipProcessorService {
   }
 
   static String _formatAmount(double amount) {
-    if (amount == amount.truncateToDouble()) {
-      return amount.toStringAsFixed(0);
+    if (amount == amount.roundToDouble() && amount == amount.toInt().toDouble()) {
+      final whole = amount.toInt().toString();
+      // Add thousands separator
+      final formatted = whole.replaceAllMapped(
+        RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+        (m) => '${m[1]},',
+      );
+      return '฿$formatted';
     }
     final formatted = amount.toStringAsFixed(2);
     // Add thousands separator
@@ -70,6 +76,6 @@ class SlipProcessorService {
       RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
       (match) => '${match[1]},',
     );
-    return '$intPart.${parts[1]}';
+    return '฿$intPart.${parts[1]}';
   }
 }

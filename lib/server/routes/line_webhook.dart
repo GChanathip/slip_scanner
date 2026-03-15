@@ -61,14 +61,24 @@ class LineWebhookHandler {
         final messageType = message?['type'] as String?;
 
         if (messageType == 'image') {
+          final messageId = message?['id']?.toString();
+          if (messageId == null) {
+            debugPrint('Missing message ID');
+            return;
+          }
           await _handleImageMessage(
-            messageId: message!['id'].toString(),
+            messageId: messageId,
             replyToken: replyToken,
             userId: userId,
           );
         } else if (messageType == 'text') {
+          final text = message?['text'] as String?;
+          if (text == null) {
+            debugPrint('Missing message text');
+            return;
+          }
           await _handleTextMessage(
-            text: message!['text'] as String,
+            text: text,
             replyToken: replyToken,
             userId: userId,
           );
@@ -95,28 +105,34 @@ class LineWebhookHandler {
       final result = await SlipProcessorService.processLineImage(imageData);
 
       // Reply with the actual result (replyToken is still valid for ~30s)
+      final resultMessages = [LineService.textMessage(result)];
       if (replyToken != null) {
-        await lineService!.replyMessage(replyToken, [
-          LineService.textMessage(result),
-        ]);
+        final replied = await lineService!.replyMessage(replyToken, resultMessages);
+        if (!replied && userId != null) {
+          await lineService!.pushMessage(userId, resultMessages);
+        }
       } else if (userId != null) {
-        await lineService!.pushMessage(userId, [
-          LineService.textMessage(result),
-        ]);
+        await lineService!.pushMessage(userId, resultMessages);
       }
 
       _addEvent(WebhookEvent(type: 'image', detail: 'Processed: ${result.split('\n').first}'));
     } catch (e) {
       debugPrint('Error processing image: $e');
-      // replyToken may still be valid if image download/OCR failed quickly
-      if (replyToken != null) {
-        await lineService!.replyMessage(replyToken, [
+      // Try to notify user about the error
+      try {
+        final errorMessages = [
           LineService.textMessage('Sorry, I could not process this image. Please try again.'),
-        ]);
-      } else if (userId != null) {
-        await lineService!.pushMessage(userId, [
-          LineService.textMessage('Sorry, I could not process this image. Please try again.'),
-        ]);
+        ];
+        if (replyToken != null) {
+          final replied = await lineService!.replyMessage(replyToken, errorMessages);
+          if (!replied && userId != null) {
+            await lineService!.pushMessage(userId, errorMessages);
+          }
+        } else if (userId != null) {
+          await lineService!.pushMessage(userId, errorMessages);
+        }
+      } catch (replyError) {
+        debugPrint('Failed to send error reply: $replyError');
       }
       _addEvent(WebhookEvent(type: 'image', detail: 'Error: $e'));
     }
@@ -133,14 +149,14 @@ class LineWebhookHandler {
       // Process query through LLM
       final response = await ChatQueryService.processQuery(text);
 
+      final responseMessages = [LineService.textMessage(response)];
       if (replyToken != null) {
-        await lineService!.replyMessage(replyToken, [
-          LineService.textMessage(response),
-        ]);
+        final replied = await lineService!.replyMessage(replyToken, responseMessages);
+        if (!replied && userId != null) {
+          await lineService!.pushMessage(userId, responseMessages);
+        }
       } else if (userId != null) {
-        await lineService!.pushMessage(userId, [
-          LineService.textMessage(response),
-        ]);
+        await lineService!.pushMessage(userId, responseMessages);
       }
 
       _addEvent(WebhookEvent(
@@ -149,14 +165,20 @@ class LineWebhookHandler {
       ));
     } catch (e) {
       debugPrint('Error processing text query: $e');
-      if (replyToken != null) {
-        await lineService!.replyMessage(replyToken, [
+      try {
+        final errorMessages = [
           LineService.textMessage('Sorry, I encountered an error. Please try again.'),
-        ]);
-      } else if (userId != null) {
-        await lineService!.pushMessage(userId, [
-          LineService.textMessage('Sorry, I encountered an error. Please try again.'),
-        ]);
+        ];
+        if (replyToken != null) {
+          final replied = await lineService!.replyMessage(replyToken, errorMessages);
+          if (!replied && userId != null) {
+            await lineService!.pushMessage(userId, errorMessages);
+          }
+        } else if (userId != null) {
+          await lineService!.pushMessage(userId, errorMessages);
+        }
+      } catch (replyError) {
+        debugPrint('Failed to send error reply: $replyError');
       }
       _addEvent(WebhookEvent(type: 'text', detail: 'Error: $e'));
     }

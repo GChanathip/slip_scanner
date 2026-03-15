@@ -1,29 +1,35 @@
 import 'dart:convert';
 import 'package:cactus/cactus.dart';
 import 'package:cactus/models/types.dart';
+import 'package:flutter/foundation.dart';
 import '../models/category_registry.dart';
 import 'cactus_service.dart';
+import 'category_service.dart';
 
 /// Result of LLM extraction from slip text
 class ExtractionResult {
   final String? recipientName;
   final String? notes;
   final String? category;
+  final String? categorySource; // 'ai' | 'rule'
 
-  ExtractionResult({this.recipientName, this.notes, this.category});
+  ExtractionResult({this.recipientName, this.notes, this.category, this.categorySource});
 
   @override
-  String toString() => 'ExtractionResult(recipient: $recipientName, notes: $notes, category: $category)';
+  String toString() =>
+      'ExtractionResult(recipient: $recipientName, notes: $notes, category: $category, source: $categorySource)';
 }
 
 /// Service for extracting structured data from OCR text using LLM
 class ExtractionService {
-  static const _systemPrompt = '''You are analyzing Thai banking payment slip text.
+  static const _systemPromptPrefix = '''You are analyzing Thai banking payment slip text.
 Extract the following information and respond in JSON format only:
 {
   "recipientName": "recipient's name (who received the money) or null if not found",
   "notes": "any payment notes/memo/reference or null if not found",
-  "category": "one of: food, transport, utilities, shopping, transfer, entertainment, health, education, rent, subscriptions, groceries, personal_care, gifts, other"
+  "category": "one of: ''';
+
+  static const _systemPromptSuffix = '''"
 }
 
 Rules:
@@ -33,27 +39,74 @@ Rules:
 - Keep recipientName concise (just the name, no account numbers)
 - Notes should be brief (max 100 chars)''';
 
-  /// Extract structured data from OCR text
-  static Future<ExtractionResult> extractFromText(String extractedText) async {
+  /// Build a dynamic system prompt that includes custom category names.
+  static String _buildSystemPrompt(Set<String> validCategories) {
+    final categoryList = validCategories.join(', ');
+    return '$_systemPromptPrefix$categoryList$_systemPromptSuffix';
+  }
+
+  /// Extract structured data from OCR text.
+  ///
+  /// [categoryService] is optional but strongly recommended for production use.
+  /// When provided it:
+  ///   - enriches the LLM prompt with custom category names
+  ///   - applies rule-based category overrides after LLM extraction
+  static Future<ExtractionResult> extractFromText(
+    String extractedText, {
+    CategoryService? categoryService,
+    Set<String>? cachedValidCategories,
+  }) async {
     if (!CactusService.instance.isLoaded) {
       throw Exception('Model not loaded');
     }
 
+    // Resolve the set of valid category names (cached for batch efficiency).
+    final validCategories = cachedValidCategories ??
+        (categoryService != null
+            ? await categoryService.getValidCategoryNames()
+            : kBuiltInCategorySlugs.toSet());
+
+    final systemPrompt = _buildSystemPrompt(validCategories);
+
     final messages = [
-      ChatMessage(content: _systemPrompt, role: 'system'),
+      ChatMessage(content: systemPrompt, role: 'system'),
       ChatMessage(content: 'Extract info from this Thai banking slip:\n\n$extractedText', role: 'user'),
     ];
 
     final result = await CactusService.instance.generateCompletion(messages);
 
-    if (result.success) {
-      return _parseExtractionResult(result.response);
+    if (!result.success) {
+      throw Exception('Extraction failed: ${result.response}');
     }
-    throw Exception('Extraction failed: ${result.response}');
+
+    final parsed = _parseExtractionResult(result.response, validCategories);
+
+    // Rule-based category override.
+    if (categoryService != null && parsed.recipientName != null) {
+      final rule = await categoryService.findRule(parsed.recipientName!);
+      if (rule != null) {
+        return ExtractionResult(
+          recipientName: parsed.recipientName,
+          notes: parsed.notes,
+          category: rule.category,
+          categorySource: 'rule',
+        );
+      }
+    }
+
+    return ExtractionResult(
+      recipientName: parsed.recipientName,
+      notes: parsed.notes,
+      category: parsed.category,
+      categorySource: 'ai',
+    );
   }
 
   /// Parse JSON response into ExtractionResult
-  static ExtractionResult _parseExtractionResult(String jsonResponse) {
+  static ExtractionResult _parseExtractionResult(
+    String jsonResponse,
+    Set<String> validCategories,
+  ) {
     try {
       // Try to extract JSON from the response (in case there's extra text)
       String jsonStr = jsonResponse.trim();
@@ -70,7 +123,7 @@ Rules:
       return ExtractionResult(
         recipientName: _cleanString(json['recipientName']),
         notes: _cleanString(json['notes']),
-        category: _validateCategory(json['category']),
+        category: _validateCategory(json['category'], validCategories),
       );
     } catch (e) {
       // Return empty result on parse failure
@@ -86,10 +139,55 @@ Rules:
     return str;
   }
 
-  /// Validate category is one of the allowed values
-  static String? _validateCategory(dynamic value) {
+  /// Validate category against the given valid names; falls back to 'other'.
+  static String? _validateCategory(dynamic value, Set<String> validCategories) {
     if (value == null) return 'other';
     final str = value.toString().toLowerCase().trim();
-    return validateCategorySlug(str);
+    if (validCategories.contains(str)) return str;
+    // Allow custom category names (exact match, case-sensitive in storage)
+    if (validCategories.contains(value.toString().trim())) {
+      return value.toString().trim();
+    }
+    return 'other';
+  }
+
+  // ─── Visible for testing ────────────────────────────────────────────────
+
+  @visibleForTesting
+  static String buildSystemPromptForTest(Set<String> validCategories) =>
+      _buildSystemPrompt(validCategories);
+
+  @visibleForTesting
+  static String? validateCategoryForTest(dynamic value, Set<String> validCategories) =>
+      _validateCategory(value, validCategories);
+
+  @visibleForTesting
+  static Future<ExtractionResult> applyRuleOverride(
+    ExtractionResult base,
+    CategoryService categoryService,
+  ) async {
+    if (base.recipientName == null) {
+      return ExtractionResult(
+        recipientName: base.recipientName,
+        notes: base.notes,
+        category: base.category,
+        categorySource: 'ai',
+      );
+    }
+    final rule = await categoryService.findRule(base.recipientName!);
+    if (rule != null) {
+      return ExtractionResult(
+        recipientName: base.recipientName,
+        notes: base.notes,
+        category: rule.category,
+        categorySource: 'rule',
+      );
+    }
+    return ExtractionResult(
+      recipientName: base.recipientName,
+      notes: base.notes,
+      category: base.category,
+      categorySource: 'ai',
+    );
   }
 }

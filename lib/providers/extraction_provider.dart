@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../services/budget_alert_service.dart';
+import '../services/category_service.dart';
 import '../services/database_service.dart';
 import '../services/extraction_service.dart';
 import '../services/extraction_notifier.dart';
@@ -18,12 +19,18 @@ class ExtractionQueue extends _$ExtractionQueue {
   int _pauseCount = 0;
   Completer<void>? _workAvailable;
 
+  // Cached per-session for rule lookups and dynamic prompt generation.
+  CategoryService? _categoryService;
+  Set<String>? _cachedValidCategories;
+
   @override
   ExtractionQueueState build() {
     ref.onDispose(() {
       _isRunning = false;
       _newSlipsSubscription?.cancel();
-      _workAvailable?.complete();
+      if (_workAvailable != null && !_workAvailable!.isCompleted) {
+        _workAvailable!.complete();
+      }
     });
 
     // Load initial counts
@@ -48,11 +55,28 @@ class ExtractionQueue extends _$ExtractionQueue {
     }
   }
 
+  /// Initialise CategoryService for rule overrides + dynamic prompts.
+  /// Called fire-and-forget from [startBackgroundProcessing]; any error is
+  /// non-fatal — rule overrides are simply skipped while null.
+  Future<void> _initCategoryService() async {
+    try {
+      final db = await DatabaseService.database;
+      _categoryService = CategoryService(db);
+      _cachedValidCategories = await _categoryService!.getValidCategoryNames();
+      debugPrint('✅ CategoryService ready for extraction');
+    } catch (e) {
+      debugPrint('⚠️ CategoryService init failed, rule overrides disabled: $e');
+    }
+  }
+
   /// Start event-driven background processing - called after model is loaded
   void startBackgroundProcessing() {
     if (_isRunning) return;
     _isRunning = true;
     state = state.copyWith(isProcessing: true);
+
+    // Initialise CategoryService asynchronously (non-blocking).
+    _initCategoryService();
 
     // Listen for new slips (event-driven - no polling delay!)
     _newSlipsSubscription = ExtractionNotifier.instance.onNewSlips.listen((_) {
@@ -71,7 +95,11 @@ class ExtractionQueue extends _$ExtractionQueue {
     _pauseCount = 0;
     _newSlipsSubscription?.cancel();
     _newSlipsSubscription = null;
-    _workAvailable?.complete();
+    if (_workAvailable != null && !_workAvailable!.isCompleted) {
+      _workAvailable!.complete();
+    }
+    _categoryService = null;
+    _cachedValidCategories = null;
     state = state.copyWith(isProcessing: false, currentSlipId: null);
     debugPrint('🛑 Background extraction stopped');
   }
@@ -98,7 +126,9 @@ class ExtractionQueue extends _$ExtractionQueue {
 
   /// Signal that work is available (wakes up the processing loop)
   void _signalWorkAvailable() {
-    _workAvailable?.complete();
+    if (_workAvailable != null && !_workAvailable!.isCompleted) {
+      _workAvailable!.complete();
+    }
     _workAvailable = null;
   }
 
@@ -155,6 +185,17 @@ class ExtractionQueue extends _$ExtractionQueue {
       if (pendingSlips.isEmpty) return false;
 
       final slip = pendingSlips.first;
+
+      // Defense-in-depth: skip slips that have exceeded max retries
+      if (slip.retryCount >= 3) {
+        debugPrint('⏭ Slip ${slip.id} exceeded max retries (${slip.retryCount}), marking failed');
+        await DatabaseService.updateLLMStatus(slip.id!, 'failed');
+        final failed = await DatabaseService.countSlipsWithStatus('failed');
+        final pending = await DatabaseService.countSlipsWithStatus('pending');
+        state = state.copyWith(failedCount: failed, pendingCount: pending);
+        return true; // Signal that we did work so the loop continues
+      }
+
       state = state.copyWith(currentSlipId: slip.id);
 
       debugPrint('⚡ Processing slip ${slip.id}...');
@@ -163,7 +204,11 @@ class ExtractionQueue extends _$ExtractionQueue {
       await DatabaseService.updateLLMStatus(slip.id!, 'processing');
 
       // Run extraction (this is the main LLM work)
-      final result = await ExtractionService.extractFromText(slip.extractedText);
+      final result = await ExtractionService.extractFromText(
+        slip.extractedText,
+        categoryService: _categoryService,
+        cachedValidCategories: _cachedValidCategories,
+      );
       debugPrint('⚡ Extracted: $result');
 
       // Update database with extracted data
@@ -172,6 +217,7 @@ class ExtractionQueue extends _$ExtractionQueue {
         recipientName: result.recipientName,
         notes: result.notes,
         category: result.category,
+        categorySource: result.categorySource,
       );
 
       // Mark as completed

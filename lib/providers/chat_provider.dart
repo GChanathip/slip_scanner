@@ -73,10 +73,15 @@ class Chat extends _$Chat {
         endDate: state.endDate,
       );
 
+      // Limit message history to avoid exceeding context window
+      final recentMessages = state.messages.length > 20
+          ? state.messages.sublist(state.messages.length - 20)
+          : state.messages;
+
       // Create message list for LLM
       final llmMessages = [
         ChatMessage(content: systemPrompt, role: 'system'),
-        ...state.messages.map((m) => ChatMessage(content: m.content, role: m.role)),
+        ...recentMessages.map((m) => ChatMessage(content: m.content, role: m.role)),
       ];
 
       // Stream response

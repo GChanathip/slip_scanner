@@ -1,154 +1,194 @@
+/// Unit tests for ExtractionService's rule-based override and category
+/// validation logic — no LLM / CactusService involvement.
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/mockito.dart';
-import 'package:slip_scanner/models/extraction_result.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:slip_scanner/services/category_service.dart';
 import 'package:slip_scanner/services/extraction_service.dart';
 
+// ─── Minimal in-memory DB (same schema as category_service_test) ─────────────
+
+Future<Database> _openTestDb() async {
+  final db = await databaseFactoryFfi.openDatabase(
+    inMemoryDatabasePath,
+    options: OpenDatabaseOptions(
+      version: 1,
+      onCreate: (db, _) async {
+        await db.execute('''
+          CREATE TABLE custom_categories(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            icon TEXT NOT NULL DEFAULT 'utensils',
+            color TEXT NOT NULL DEFAULT 'orange',
+            createdAt TEXT NOT NULL
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE category_rules(
+            recipientPattern TEXT PRIMARY KEY,
+            category TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'user',
+            createdAt TEXT NOT NULL
+          )
+        ''');
+      },
+    ),
+  );
+  return db;
+}
+
 void main() {
-  group('ExtractionService with Custom Categories', () {
-    group('Rule Override', () {
-      test('rule exists: LLM category overridden, source = rule', () async {
-        // Setup rule: Grab → transport
-        await CategoryService.upsertRule('Grab', 'transport');
+  setUpAll(() => sqfliteFfiInit());
 
-        // Mock LLM response with different category (e.g., 'shopping')
-        final extractedText = 'Grab transaction from Grab\nAmount: 50\n...';
+  late Database db;
+  late CategoryService svc;
 
-        // Call extraction with custom category validation
-        final result = await ExtractionService.extractFromText(extractedText);
+  setUp(() async {
+    db = await _openTestDb();
+    svc = CategoryService(db);
+  });
 
-        // Verify: rule overrides LLM, source = 'rule'
-        expect(result.category, 'transport');
-        expect(result.categorySource, 'rule');
-      });
+  tearDown(() => db.close());
 
-      test('no rule: LLM category used, source = ai', () async {
-        // No rule for this recipient
-        final extractedText = 'Unknown Restaurant\nAmount: 250\n...';
+  // ─── applyRuleOverride ────────────────────────────────────────────────────
 
-        final result = await ExtractionService.extractFromText(extractedText);
+  group('applyRuleOverride', () {
+    test('rule exists → category overridden, source = rule', () async {
+      await svc.upsertRule('Grab', 'transport');
+      final base = ExtractionResult(
+        recipientName: 'Grab',
+        notes: null,
+        category: 'shopping', // LLM guessed wrong
+      );
 
-        // Verify: LLM category used, source = 'ai'
-        expect(result.category, isNotNull);
-        expect(result.categorySource, 'ai');
-      });
+      final result = await ExtractionService.applyRuleOverride(base, svc);
 
-      test('rule for built-in category accepted', () async {
-        // Rule: Starbucks → food
-        await CategoryService.upsertRule('Starbucks', 'food');
-
-        final extractedText = 'Starbucks\nAmount: 120\n...';
-
-        final result = await ExtractionService.extractFromText(extractedText);
-
-        expect(result.category, 'food');
-        expect(result.categorySource, 'rule');
-      });
-
-      test('rule for custom category accepted', () async {
-        // Create custom category
-        await CategoryService.create('Meals', 'utensils', 'orange');
-
-        // Rule: Grab → Meals (custom)
-        await CategoryService.upsertRule('Grab', 'Meals');
-
-        final extractedText = 'Grab transaction\nAmount: 50\n...';
-
-        final result = await ExtractionService.extractFromText(extractedText);
-
-        expect(result.category, 'Meals');
-        expect(result.categorySource, 'rule');
-      });
-
-      test('rule normalized recipient match', () async {
-        // Rule for "Grab App"
-        await CategoryService.upsertRule('Grab App', 'transport');
-
-        // OCR text has "GRAB APP" (different casing/spacing)
-        final extractedText = 'Payment to   GRAB APP  \nAmount: 50\n...';
-
-        final result = await ExtractionService.extractFromText(extractedText);
-
-        // Normalization should match
-        expect(result.category, 'transport');
-        expect(result.categorySource, 'rule');
-      });
+      expect(result.category, 'transport');
+      expect(result.categorySource, 'rule');
     });
 
-    group('Category Validation', () {
-      test('LLM custom category in response accepted', () async {
-        // Custom category 'Meals' exists
-        await CategoryService.create('Meals', 'utensils', 'orange');
+    test('no rule → LLM category preserved, source = ai', () async {
+      final base = ExtractionResult(
+        recipientName: 'Unknown Restaurant',
+        notes: null,
+        category: 'food',
+      );
 
-        // LLM returns 'Meals' (not a built-in)
-        // Mock response: {"recipientName": "...", "notes": "...", "category": "Meals"}
+      final result = await ExtractionService.applyRuleOverride(base, svc);
 
-        // Verify: accepted as valid
-        // expect(validationPassed, true);
-      });
-
-      test('unknown category fallback to other', () async {
-        // LLM returns 'InvalidCategory' (not in built-in or custom)
-        final extractedText = 'Some transaction\nAmount: 100\n...';
-
-        final result = await ExtractionService.extractFromText(extractedText);
-
-        // Verify: fallback to 'other'
-        if (result.category != null && !await _isValidCategory(result.category!)) {
-          expect(result.category, 'other');
-        }
-      });
-
-      test('null category fallback to other', () async {
-        // LLM returns null for category
-        // Verify: defaults to 'other'
-      });
+      expect(result.category, 'food');
+      expect(result.categorySource, 'ai');
     });
 
-    group('Dynamic System Prompt', () {
-      test('prompt includes custom category names', () async {
-        await CategoryService.create('Meals', 'utensils', 'orange');
-        await CategoryService.create('Coffee', 'coffee', 'brown');
+    test('rule lookup normalises recipient name', () async {
+      await svc.upsertRule('  GRAB APP  ', 'transport');
+      final base = ExtractionResult(
+        recipientName: 'Grab App', // different casing
+        notes: null,
+        category: 'shopping',
+      );
 
-        // Get system prompt (may need to expose it for testing)
-        // Verify: includes "Meals" and "Coffee" in category list
+      final result = await ExtractionService.applyRuleOverride(base, svc);
 
-        // Example:
-        // "category: one of: food, transport, ..., Meals, Coffee"
-      });
-
-      test('prompt updated when custom category added', () async {
-        // Get initial prompt
-        // Add new custom category
-        // Get updated prompt
-        // Verify: new category included
-      });
-
-      test('prompt updated when custom category deleted', () async {
-        final category = await CategoryService.create('Meals', 'utensils', 'orange');
-
-        // Get initial prompt
-        // Delete category
-        // Get updated prompt
-        // Verify: 'Meals' removed from prompt
-      });
+      expect(result.category, 'transport');
+      expect(result.categorySource, 'rule');
     });
 
-    group('Extraction Result', () {
-      test('includes categorySource in result', () async {
-        final extractedText = 'Test transaction\nAmount: 100\n...';
+    test('rule for custom category accepted', () async {
+      await svc.create('Meals', 'utensils', 'orange');
+      await svc.upsertRule('MK Restaurant', 'Meals');
+      final base = ExtractionResult(
+        recipientName: 'MK Restaurant',
+        notes: null,
+        category: 'food',
+      );
 
-        final result = await ExtractionService.extractFromText(extractedText);
+      final result = await ExtractionService.applyRuleOverride(base, svc);
 
-        expect(result.categorySource, isNotNull);
-        expect(result.categorySource, isIn(['ai', 'rule', 'user']));
-      });
+      expect(result.category, 'Meals');
+      expect(result.categorySource, 'rule');
+    });
+
+    test('null recipientName → source = ai, no rule lookup', () async {
+      await svc.upsertRule('grab', 'transport');
+      final base = ExtractionResult(
+        recipientName: null,
+        notes: null,
+        category: 'other',
+      );
+
+      final result = await ExtractionService.applyRuleOverride(base, svc);
+
+      expect(result.categorySource, 'ai');
     });
   });
 
-  // Helper to validate category
-  Future<bool> _isValidCategory(String category) async {
-    final validNames = await CategoryService.getValidCategoryNames();
-    return validNames.contains(category);
-  }
+  // ─── validateCategoryForTest ──────────────────────────────────────────────
+
+  group('validateCategory', () {
+    const builtIns = {
+      'food', 'transport', 'utilities', 'shopping', 'transfer',
+      'entertainment', 'health', 'education', 'rent', 'subscriptions',
+      'groceries', 'personal_care', 'gifts', 'other',
+    };
+
+    test('valid built-in category returned as-is', () {
+      expect(ExtractionService.validateCategoryForTest('food', builtIns), 'food');
+      expect(ExtractionService.validateCategoryForTest('transport', builtIns), 'transport');
+    });
+
+    test('unknown category falls back to other', () {
+      expect(ExtractionService.validateCategoryForTest('invalid_xyz', builtIns), 'other');
+    });
+
+    test('null falls back to other', () {
+      expect(ExtractionService.validateCategoryForTest(null, builtIns), 'other');
+    });
+
+    test('custom category name accepted when in valid set', () {
+      final withCustom = {...builtIns, 'Meals'};
+      expect(ExtractionService.validateCategoryForTest('Meals', withCustom), 'Meals');
+    });
+
+    test('custom category NOT in set falls back to other', () {
+      expect(ExtractionService.validateCategoryForTest('Meals', builtIns), 'other');
+    });
+  });
+
+  // ─── buildSystemPromptForTest ─────────────────────────────────────────────
+
+  group('buildSystemPrompt', () {
+    test('includes built-in category names in prompt', () {
+      final prompt = ExtractionService.buildSystemPromptForTest(
+        {'food', 'transport', 'other'},
+      );
+      expect(prompt, contains('food'));
+      expect(prompt, contains('transport'));
+      expect(prompt, contains('other'));
+    });
+
+    test('includes custom category names in prompt', () async {
+      await svc.create('Meals', 'utensils', 'orange');
+      await svc.create('Nightlife', 'utensils', 'purple');
+      final validCategories = await svc.getValidCategoryNames();
+
+      final prompt = ExtractionService.buildSystemPromptForTest(validCategories);
+
+      expect(prompt, contains('Meals'));
+      expect(prompt, contains('Nightlife'));
+    });
+
+    test('prompt changes when custom category added', () async {
+      final before = ExtractionService.buildSystemPromptForTest(
+        await svc.getValidCategoryNames(),
+      );
+      await svc.create('NewCat', 'utensils', 'orange');
+      final after = ExtractionService.buildSystemPromptForTest(
+        await svc.getValidCategoryNames(),
+      );
+
+      expect(before, isNot(contains('NewCat')));
+      expect(after, contains('NewCat'));
+    });
+  });
 }

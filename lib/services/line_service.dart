@@ -30,7 +30,7 @@ class LineService {
   bool verifySignature(String body, String signature) {
     final hmacSha256 = Hmac(sha256, utf8.encode(channelSecret));
     final digest = hmacSha256.convert(utf8.encode(body));
-    final expected = base64.decode(base64.encode(digest.bytes));
+    final expected = Uint8List.fromList(digest.bytes);
     final List<int> actual;
     try {
       actual = base64.decode(signature);
@@ -60,7 +60,8 @@ class LineService {
   }
 
   /// Send reply using replyToken (valid ~30s after webhook).
-  Future<void> replyMessage(
+  /// Returns true on success (HTTP 200), false otherwise.
+  Future<bool> replyMessage(
     String replyToken,
     List<Map<String, dynamic>> messages,
   ) async {
@@ -74,11 +75,14 @@ class LineService {
     );
     if (response.statusCode != 200) {
       debugPrint('LINE reply failed: ${response.statusCode} ${response.body}');
+      return false;
     }
+    return true;
   }
 
   /// Send push message (for async responses after processing).
-  Future<void> pushMessage(
+  /// Returns true on success (HTTP 200), false otherwise.
+  Future<bool> pushMessage(
     String userId,
     List<Map<String, dynamic>> messages,
   ) async {
@@ -92,7 +96,9 @@ class LineService {
     );
     if (response.statusCode != 200) {
       debugPrint('LINE push failed: ${response.statusCode} ${response.body}');
+      return false;
     }
+    return true;
   }
 
   /// Helper: create a text message object.

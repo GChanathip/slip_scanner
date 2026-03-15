@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cactus/cactus.dart';
 import 'package:flutter/foundation.dart';
 
@@ -230,7 +232,13 @@ Guidelines:
       ChatMessage(content: userMessage, role: 'user'),
     ];
 
-    final result = await CactusService.instance.generateCompletion(messages);
-    return result.response;
+    try {
+      final result = await CactusService.instance
+          .generateCompletion(messages)
+          .timeout(const Duration(seconds: 25));
+      return result.response;
+    } on TimeoutException {
+      return 'Sorry, I took too long to respond. Please try again.';
+    }
   }
 }

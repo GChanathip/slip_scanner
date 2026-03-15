@@ -26,9 +26,11 @@ class AppDelegate: FlutterAppDelegate {
                     return
                 }
                 DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                    let slipResult = self?.slipProcessor?.processImageData(imageData.data)
-                    DispatchQueue.main.async {
-                        result(slipResult)
+                    autoreleasepool {
+                        let slipResult = self?.slipProcessor?.processImageData(imageData.data)
+                        DispatchQueue.main.async {
+                            result(slipResult)
+                        }
                     }
                 }
 
@@ -39,9 +41,11 @@ class AppDelegate: FlutterAppDelegate {
                     return
                 }
                 DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                    let slipResult = self?.slipProcessor?.processImageFile(at: imagePath)
-                    DispatchQueue.main.async {
-                        result(slipResult)
+                    autoreleasepool {
+                        let slipResult = self?.slipProcessor?.processImageFile(at: imagePath)
+                        DispatchQueue.main.async {
+                            result(slipResult)
+                        }
                     }
                 }
 

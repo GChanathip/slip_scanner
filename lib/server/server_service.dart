@@ -18,8 +18,9 @@ class ServerService {
 
   HttpServer? _server;
   LineService? _lineService;
-  int _port = 8080;
+  int _port = ConfigService.defaultPort;
   bool _isRunning = false;
+  Completer<void>? _pendingOperation;
 
   bool get isRunning => _isRunning;
   int get port => _port;
@@ -31,45 +32,67 @@ class ServerService {
 
   /// Start the shelf server.
   Future<void> start({int? port}) async {
+    if (_pendingOperation != null) {
+      await _pendingOperation!.future;
+    }
     if (_isRunning) return;
 
-    _port = port ?? await ConfigService.getServerPort();
+    _pendingOperation = Completer<void>();
+    try {
+      _port = port ?? await ConfigService.getServerPort();
 
-    // Initialize LINE service if configured
-    final token = await ConfigService.getLineChannelToken();
-    final secret = await ConfigService.getLineChannelSecret();
-    if (token != null && token.isNotEmpty && secret != null && secret.isNotEmpty) {
-      _lineService = LineService(
-        channelAccessToken: token,
-        channelSecret: secret,
-      );
+      // Initialize LINE service if configured
+      final token = await ConfigService.getLineChannelToken();
+      final secret = await ConfigService.getLineChannelSecret();
+      if (token != null &&
+          token.isNotEmpty &&
+          secret != null &&
+          secret.isNotEmpty) {
+        _lineService = LineService(
+          channelAccessToken: token,
+          channelSecret: secret,
+        );
+      }
+
+      final webhookHandler = LineWebhookHandler(lineService: _lineService);
+
+      final router = Router()
+        ..post('/webhook/line', webhookHandler.handle)
+        ..get('/health', _healthHandler);
+
+      final handler =
+          const Pipeline().addMiddleware(logRequests()).addHandler(router.call);
+
+      _server = await shelf_io.serve(handler, InternetAddress.anyIPv4, _port);
+      _isRunning = true;
+      _statusController.add(true);
+      debugPrint('Server started on port $_port');
+    } finally {
+      _pendingOperation!.complete();
+      _pendingOperation = null;
     }
-
-    final webhookHandler = LineWebhookHandler(lineService: _lineService);
-
-    final router = Router()
-      ..post('/webhook/line', webhookHandler.handle)
-      ..get('/health', _healthHandler);
-
-    final handler = const Pipeline()
-        .addMiddleware(logRequests())
-        .addHandler(router.call);
-
-    _server = await shelf_io.serve(handler, InternetAddress.anyIPv4, _port);
-    _isRunning = true;
-    _statusController.add(true);
-    debugPrint('Server started on port $_port');
   }
 
   /// Stop the server.
   Future<void> stop() async {
-    await _server?.close(force: true);
-    _lineService?.dispose();
-    _lineService = null;
-    _server = null;
-    _isRunning = false;
-    _statusController.add(false);
-    debugPrint('Server stopped');
+    if (_pendingOperation != null) {
+      await _pendingOperation!.future;
+    }
+    if (!_isRunning) return;
+
+    _pendingOperation = Completer<void>();
+    try {
+      await _server?.close(force: true);
+      _lineService?.dispose();
+      _lineService = null;
+      _server = null;
+      _isRunning = false;
+      _statusController.add(false);
+      debugPrint('Server stopped');
+    } finally {
+      _pendingOperation!.complete();
+      _pendingOperation = null;
+    }
   }
 
   /// Restart with updated configuration.

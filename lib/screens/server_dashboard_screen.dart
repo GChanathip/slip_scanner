@@ -26,7 +26,9 @@ class _ServerDashboardScreenState extends ConsumerState<ServerDashboardScreen> {
   final _serverService = ServerService.instance;
   final _tokenController = TextEditingController();
   final _secretController = TextEditingController();
-  final _portController = TextEditingController(text: '8080');
+  final _portController = TextEditingController(
+    text: '${ConfigService.defaultPort}',
+  );
 
   bool _isLoading = false;
   StreamSubscription<bool>? _statusSubscription;
@@ -63,10 +65,24 @@ class _ServerDashboardScreenState extends ConsumerState<ServerDashboardScreen> {
   }
 
   Future<void> _saveConfig() async {
-    await ConfigService.setLineChannelToken(_tokenController.text.trim());
-    await ConfigService.setLineChannelSecret(_secretController.text.trim());
-    final port = int.tryParse(_portController.text.trim()) ?? 8080;
-    await ConfigService.setServerPort(port);
+    try {
+      await ConfigService.setLineChannelToken(_tokenController.text.trim());
+      await ConfigService.setLineChannelSecret(_secretController.text.trim());
+      final port =
+          int.tryParse(_portController.text.trim()) ?? ConfigService.defaultPort;
+      await ConfigService.setServerPort(port);
+    } catch (e, s) {
+      debugPrint('Failed to save config: $e');
+      debugPrintStack(stackTrace: s);
+      if (mounted) {
+        showFToast(
+          context: context,
+          title: const Text('Error'),
+          description: const Text('Failed to save configuration'),
+        );
+      }
+      rethrow;
+    }
   }
 
   int? _validatePort() {
@@ -76,8 +92,9 @@ class _ServerDashboardScreenState extends ConsumerState<ServerDashboardScreen> {
   }
 
   /// Ensure CactusLM is loaded and extraction queue is running.
-  Future<void> _ensureModelAndExtraction() async {
-    await ensureModelLoaded(context, ref);
+  /// Returns true if the model is ready, false if cancelled or failed.
+  Future<bool> _ensureModelAndExtraction() async {
+    return ensureModelLoaded(context, ref);
   }
 
   Future<void> _toggleServer() async {
@@ -102,7 +119,19 @@ class _ServerDashboardScreenState extends ConsumerState<ServerDashboardScreen> {
       } else {
         await _saveConfig();
         // Initialize LLM and extraction queue before starting server
-        await _ensureModelAndExtraction();
+        final modelReady = await _ensureModelAndExtraction();
+        if (!modelReady) {
+          if (mounted) {
+            showFToast(
+              context: context,
+              title: const Text('Model not ready'),
+              description: const Text(
+                'AI model must be loaded before starting the server.',
+              ),
+            );
+          }
+          return;
+        }
         await _serverService.start();
       }
     } catch (e,s) {

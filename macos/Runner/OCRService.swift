@@ -89,7 +89,7 @@ class OCRService {
         for regex in RegexPatterns.amountPatterns {
             if let match = regex.firstMatch(in: text, options: [], range: range) {
                 let matchedText = nsText.substring(with: match.range)
-                let matchRange = NSRange(location: 0, length: matchedText.count)
+                let matchRange = NSRange(location: 0, length: (matchedText as NSString).length)
                 if let numberMatch = RegexPatterns.numberExtractor.firstMatch(
                     in: matchedText, options: [], range: matchRange
                 ) {
@@ -234,20 +234,20 @@ class OCRService {
     // MARK: - Buddhist Calendar Helpers
 
     func containsBuddhistYear(_ dateString: String) -> Bool {
-        let range = NSRange(location: 0, length: dateString.count)
+        let range = NSRange(location: 0, length: (dateString as NSString).length)
         return RegexPatterns.buddhistYearPattern.firstMatch(in: dateString, options: [], range: range) != nil
     }
 
-    // MARK: - Cached Date Formatters (expensive to create, reuse across calls)
+    /// Normalize any extracted date string to ISO `yyyy-MM-dd` format.
+    /// Returns the original string unchanged if no known format is recognized.
+    /// Formatters are created locally to avoid thread-safety issues with shared static DateFormatters.
+    func normalizeToISODate(_ dateStr: String) -> String {
+        let trimmed = dateStr.trimmingCharacters(in: .whitespacesAndNewlines)
 
-    private static let isoOutputFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
+        let isoOutputFormatter = DateFormatter()
+        isoOutputFormatter.locale = Locale(identifier: "en_US_POSIX")
+        isoOutputFormatter.dateFormat = "yyyy-MM-dd"
 
-    private static let dateInputFormatters: [DateFormatter] = {
         let locale = Locale(identifier: "en_US")
         let formats = [
             "dd/MM/yyyy", "d/M/yyyy",
@@ -257,22 +257,13 @@ class OCRService {
             "dd MMM yyyy", "d MMM yyyy",
             "dd MMMM yyyy", "d MMMM yyyy",
         ]
-        return formats.map { format in
-            let f = DateFormatter()
-            f.locale = locale
-            f.dateFormat = format
-            return f
-        }
-    }()
 
-    /// Normalize any extracted date string to ISO `yyyy-MM-dd` format.
-    /// Returns the original string unchanged if no known format is recognized.
-    func normalizeToISODate(_ dateStr: String) -> String {
-        let trimmed = dateStr.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        for formatter in OCRService.dateInputFormatters {
+        for format in formats {
+            let formatter = DateFormatter()
+            formatter.locale = locale
+            formatter.dateFormat = format
             if let date = formatter.date(from: trimmed) {
-                return OCRService.isoOutputFormatter.string(from: date)
+                return isoOutputFormatter.string(from: date)
             }
         }
         return trimmed
