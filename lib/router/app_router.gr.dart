@@ -27,6 +27,22 @@ class AnalysisRoute extends PageRouteInfo<void> {
 }
 
 /// generated route for
+/// [CategoryManagementScreen]
+class CategoryManagementRoute extends PageRouteInfo<void> {
+  const CategoryManagementRoute({List<PageRouteInfo>? children})
+    : super(CategoryManagementRoute.name, initialChildren: children);
+
+  static const String name = 'CategoryManagementRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const CategoryManagementScreen();
+    },
+  );
+}
+
+/// generated route for
 /// [ChatScreen]
 class ChatRoute extends PageRouteInfo<ChatRouteArgs> {
   ChatRoute({
@@ -159,6 +175,22 @@ class ScanningProgressRoute extends PageRouteInfo<void> {
     name,
     builder: (data) {
       return const ScanningProgressScreen();
+    },
+  );
+}
+
+/// generated route for
+/// [ServerDashboardScreen]
+class ServerDashboardRoute extends PageRouteInfo<void> {
+  const ServerDashboardRoute({List<PageRouteInfo>? children})
+    : super(ServerDashboardRoute.name, initialChildren: children);
+
+  static const String name = 'ServerDashboardRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const ServerDashboardScreen();
     },
   );
 }

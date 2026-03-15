@@ -4,14 +4,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:forui/forui.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../models/monthly_summary.dart';
 import '../models/payment_slip.dart';
+import '../providers/budget_provider.dart';
+import '../providers/budget_state.dart';
 import '../router/app_router.dart';
 import '../services/database_service.dart';
+import '../services/monthly_summary_service.dart';
 import '../providers/scanning_provider.dart';
 import '../providers/extraction_provider.dart';
 import '../utils/formatters.dart';
 import '../widgets/hero_card.dart';
 import '../widgets/slip_list_tile.dart';
+import 'manual_entry_bottom_sheet.dart';
 
 @RoutePage()
 class HomeScreen extends ConsumerStatefulWidget {
@@ -26,12 +32,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Map<String, double> _monthlyTotals = {};
   bool _isLoading = false;
   bool _hasScannedBefore = false;
+  MonthlySummary? _monthlySummary;
+  bool _summaryDismissed = false;
+  bool _summaryExpanded = false;
 
   @override
   void initState() {
     super.initState();
     _loadData();
     _checkIfScannedBefore();
+    _loadMonthlySummary();
   }
 
   Future<void> _loadData() async {
@@ -50,11 +60,147 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
+  Future<void> _loadMonthlySummary() async {
+    final summary = await MonthlySummaryService.instance.checkAndGenerate();
+    if (summary == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final dismissed = prefs.getBool('summary_dismissed_${summary.month}') ?? false;
+    if (mounted) {
+      setState(() {
+        _monthlySummary = summary;
+        _summaryDismissed = dismissed;
+      });
+    }
+  }
+
+  Future<void> _dismissSummary() async {
+    if (_monthlySummary == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('summary_dismissed_${_monthlySummary!.month}', true);
+    setState(() => _summaryDismissed = true);
+  }
+
   Future<void> _checkIfScannedBefore() async {
     final processedIds = await DatabaseService.getProcessedAssetIds();
     setState(() {
       _hasScannedBefore = processedIds.isNotEmpty;
     });
+  }
+
+  Widget _buildBudgetProgress(FThemeData theme, BudgetState budgetState) {
+    final pct = budgetState.overallPercentage;
+    final color = pct >= 100 ? Colors.red : pct >= 75 ? Colors.orange : Colors.green;
+    return GestureDetector(
+      onTap: () => context.router.push(const AnalysisRoute()),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: theme.colors.muted,
+          borderRadius: theme.style.borderRadius,
+          border: Border.all(color: theme.colors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(FIcons.target, size: 16, color: color),
+                    const SizedBox(width: 6),
+                    Text('Budget', style: theme.typography.sm.copyWith(fontWeight: FontWeight.w500)),
+                  ],
+                ),
+                Text(
+                  '${formatCurrencyCompact(budgetState.currentMonthSpent)} / ${formatCurrencyCompact(budgetState.overallBudget)} (${pct.toStringAsFixed(0)}%)',
+                  style: theme.typography.sm.copyWith(color: color, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: (pct / 100).clamp(0.0, 1.0),
+                backgroundColor: theme.colors.background,
+                color: color,
+                minHeight: 6,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryBanner(FThemeData theme, MonthlySummary summary) {
+    final monthLabel = DateFormat('MMMM yyyy').format(DateTime.parse('${summary.month}-01'));
+    return FCard.raw(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      Icon(FIcons.sparkles, size: 18, color: theme.colors.primary),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          'Your $monthLabel summary is ready',
+                          style: theme.typography.base.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                GestureDetector(
+                  onTap: _dismissSummary,
+                  child: Icon(FIcons.x, size: 16, color: theme.colors.mutedForeground),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${formatCurrencyCompact(summary.totalSpent)}${summary.budgetTarget > 0 ? ' / ${formatCurrencyCompact(summary.budgetTarget)} budget' : ' spent'}',
+              style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground),
+            ),
+            if (_summaryExpanded) ...[
+              const SizedBox(height: 12),
+              Text(summary.narrative, style: theme.typography.sm),
+              if (summary.categoryBreakdown.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                ...(summary.categoryBreakdown.entries.toList()..sort((a, b) => b.value.compareTo(a.value)))
+                    .take(5)
+                    .map((e) => Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(formatCategory(e.key), style: theme.typography.sm),
+                              Text(formatCurrencyCompact(e.value),
+                                  style: theme.typography.sm.copyWith(fontWeight: FontWeight.w500)),
+                            ],
+                          ),
+                        )),
+              ],
+            ],
+            const SizedBox(height: 8),
+            FButton(
+              variant: FButtonVariant.ghost,
+              onPress: () => setState(() => _summaryExpanded = !_summaryExpanded),
+              mainAxisSize: MainAxisSize.min,
+              suffix: Icon(_summaryExpanded ? FIcons.chevronUp : FIcons.chevronDown, size: 14),
+              child: Text(_summaryExpanded ? 'Show less' : 'View details'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _startScanAllPhotos() async {
@@ -114,10 +260,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final theme = context.theme;
     final currentMonthTotal = _monthlyTotals[DateFormat('yyyy-MM').format(DateTime.now())] ?? 0.0;
+    final budgetState = ref.watch(budgetProvider);
 
     return FScaffold(
       header: const FHeader(title: Text('Payment Slip Scanner')),
-      child: _isLoading
+      child: Stack(
+        children: [
+          _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: () async {
@@ -126,7 +275,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               },
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
                 children: [
                   HeroCard(
                     onTap: _startScanAllPhotos,
@@ -187,7 +336,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     },
                   ),
 
+                  // Budget progress
+                  if (budgetState.hasBudget) ...[
+                    const SizedBox(height: 12),
+                    _buildBudgetProgress(theme, budgetState),
+                  ],
+
                   const SizedBox(height: 24),
+
+                  // Monthly summary banner
+                  if (_monthlySummary != null && !_summaryDismissed) ...[
+                    _buildSummaryBanner(theme, _monthlySummary!),
+                    const SizedBox(height: 16),
+                  ],
 
                   // Current Month Summary Card
                   if (_monthlyTotals.isNotEmpty) ...[
@@ -200,7 +361,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       child: Padding(
                         padding: const EdgeInsets.only(top: 8),
                         child: FButton(
-                          style: FButtonStyle.ghost(),
+                          variant: FButtonVariant.ghost,
                           onPress: () {
                             context.router.push(MonthlyViewRoute(month: DateTime.now())).then((_) => _loadData());
                           },
@@ -278,6 +439,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ],
               ),
             ),
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: FButton.icon(
+              onPress: () async {
+                final saved = await showManualEntrySheet(context);
+                if (saved == true) {
+                  await _loadData();
+                  await _loadMonthlySummary();
+                }
+              },
+              child: Icon(FIcons.plus, size: 24),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -282,7 +282,7 @@ as bool,
 /// @nodoc
 mixin _$ChatState {
 
- List<ChatMessageModel> get messages; bool get isGenerating; DateTime? get startDate; DateTime? get endDate;
+ List<ChatMessageModel> get messages; bool get isGenerating; DateTime? get startDate; DateTime? get endDate; List<SuggestionChip> get suggestionChips;
 /// Create a copy of ChatState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -293,16 +293,16 @@ $ChatStateCopyWith<ChatState> get copyWith => _$ChatStateCopyWithImpl<ChatState>
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ChatState&&const DeepCollectionEquality().equals(other.messages, messages)&&(identical(other.isGenerating, isGenerating) || other.isGenerating == isGenerating)&&(identical(other.startDate, startDate) || other.startDate == startDate)&&(identical(other.endDate, endDate) || other.endDate == endDate));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ChatState&&const DeepCollectionEquality().equals(other.messages, messages)&&(identical(other.isGenerating, isGenerating) || other.isGenerating == isGenerating)&&(identical(other.startDate, startDate) || other.startDate == startDate)&&(identical(other.endDate, endDate) || other.endDate == endDate)&&const DeepCollectionEquality().equals(other.suggestionChips, suggestionChips));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(messages),isGenerating,startDate,endDate);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(messages),isGenerating,startDate,endDate,const DeepCollectionEquality().hash(suggestionChips));
 
 @override
 String toString() {
-  return 'ChatState(messages: $messages, isGenerating: $isGenerating, startDate: $startDate, endDate: $endDate)';
+  return 'ChatState(messages: $messages, isGenerating: $isGenerating, startDate: $startDate, endDate: $endDate, suggestionChips: $suggestionChips)';
 }
 
 
@@ -313,7 +313,7 @@ abstract mixin class $ChatStateCopyWith<$Res>  {
   factory $ChatStateCopyWith(ChatState value, $Res Function(ChatState) _then) = _$ChatStateCopyWithImpl;
 @useResult
 $Res call({
- List<ChatMessageModel> messages, bool isGenerating, DateTime? startDate, DateTime? endDate
+ List<ChatMessageModel> messages, bool isGenerating, DateTime? startDate, DateTime? endDate, List<SuggestionChip> suggestionChips
 });
 
 
@@ -330,13 +330,14 @@ class _$ChatStateCopyWithImpl<$Res>
 
 /// Create a copy of ChatState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? messages = null,Object? isGenerating = null,Object? startDate = freezed,Object? endDate = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? messages = null,Object? isGenerating = null,Object? startDate = freezed,Object? endDate = freezed,Object? suggestionChips = null,}) {
   return _then(_self.copyWith(
 messages: null == messages ? _self.messages : messages // ignore: cast_nullable_to_non_nullable
 as List<ChatMessageModel>,isGenerating: null == isGenerating ? _self.isGenerating : isGenerating // ignore: cast_nullable_to_non_nullable
 as bool,startDate: freezed == startDate ? _self.startDate : startDate // ignore: cast_nullable_to_non_nullable
 as DateTime?,endDate: freezed == endDate ? _self.endDate : endDate // ignore: cast_nullable_to_non_nullable
-as DateTime?,
+as DateTime?,suggestionChips: null == suggestionChips ? _self.suggestionChips : suggestionChips // ignore: cast_nullable_to_non_nullable
+as List<SuggestionChip>,
   ));
 }
 
@@ -421,10 +422,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<ChatMessageModel> messages,  bool isGenerating,  DateTime? startDate,  DateTime? endDate)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<ChatMessageModel> messages,  bool isGenerating,  DateTime? startDate,  DateTime? endDate,  List<SuggestionChip> suggestionChips)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ChatState() when $default != null:
-return $default(_that.messages,_that.isGenerating,_that.startDate,_that.endDate);case _:
+return $default(_that.messages,_that.isGenerating,_that.startDate,_that.endDate,_that.suggestionChips);case _:
   return orElse();
 
 }
@@ -442,10 +443,10 @@ return $default(_that.messages,_that.isGenerating,_that.startDate,_that.endDate)
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<ChatMessageModel> messages,  bool isGenerating,  DateTime? startDate,  DateTime? endDate)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<ChatMessageModel> messages,  bool isGenerating,  DateTime? startDate,  DateTime? endDate,  List<SuggestionChip> suggestionChips)  $default,) {final _that = this;
 switch (_that) {
 case _ChatState():
-return $default(_that.messages,_that.isGenerating,_that.startDate,_that.endDate);case _:
+return $default(_that.messages,_that.isGenerating,_that.startDate,_that.endDate,_that.suggestionChips);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -462,10 +463,10 @@ return $default(_that.messages,_that.isGenerating,_that.startDate,_that.endDate)
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<ChatMessageModel> messages,  bool isGenerating,  DateTime? startDate,  DateTime? endDate)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<ChatMessageModel> messages,  bool isGenerating,  DateTime? startDate,  DateTime? endDate,  List<SuggestionChip> suggestionChips)?  $default,) {final _that = this;
 switch (_that) {
 case _ChatState() when $default != null:
-return $default(_that.messages,_that.isGenerating,_that.startDate,_that.endDate);case _:
+return $default(_that.messages,_that.isGenerating,_that.startDate,_that.endDate,_that.suggestionChips);case _:
   return null;
 
 }
@@ -477,7 +478,7 @@ return $default(_that.messages,_that.isGenerating,_that.startDate,_that.endDate)
 
 
 class _ChatState extends ChatState {
-  const _ChatState({final  List<ChatMessageModel> messages = const [], this.isGenerating = false, this.startDate, this.endDate}): _messages = messages,super._();
+  const _ChatState({final  List<ChatMessageModel> messages = const [], this.isGenerating = false, this.startDate, this.endDate, final  List<SuggestionChip> suggestionChips = const []}): _messages = messages,_suggestionChips = suggestionChips,super._();
   
 
  final  List<ChatMessageModel> _messages;
@@ -490,6 +491,13 @@ class _ChatState extends ChatState {
 @override@JsonKey() final  bool isGenerating;
 @override final  DateTime? startDate;
 @override final  DateTime? endDate;
+ final  List<SuggestionChip> _suggestionChips;
+@override@JsonKey() List<SuggestionChip> get suggestionChips {
+  if (_suggestionChips is EqualUnmodifiableListView) return _suggestionChips;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_suggestionChips);
+}
+
 
 /// Create a copy of ChatState
 /// with the given fields replaced by the non-null parameter values.
@@ -501,16 +509,16 @@ _$ChatStateCopyWith<_ChatState> get copyWith => __$ChatStateCopyWithImpl<_ChatSt
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ChatState&&const DeepCollectionEquality().equals(other._messages, _messages)&&(identical(other.isGenerating, isGenerating) || other.isGenerating == isGenerating)&&(identical(other.startDate, startDate) || other.startDate == startDate)&&(identical(other.endDate, endDate) || other.endDate == endDate));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ChatState&&const DeepCollectionEquality().equals(other._messages, _messages)&&(identical(other.isGenerating, isGenerating) || other.isGenerating == isGenerating)&&(identical(other.startDate, startDate) || other.startDate == startDate)&&(identical(other.endDate, endDate) || other.endDate == endDate)&&const DeepCollectionEquality().equals(other._suggestionChips, _suggestionChips));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_messages),isGenerating,startDate,endDate);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_messages),isGenerating,startDate,endDate,const DeepCollectionEquality().hash(_suggestionChips));
 
 @override
 String toString() {
-  return 'ChatState(messages: $messages, isGenerating: $isGenerating, startDate: $startDate, endDate: $endDate)';
+  return 'ChatState(messages: $messages, isGenerating: $isGenerating, startDate: $startDate, endDate: $endDate, suggestionChips: $suggestionChips)';
 }
 
 
@@ -521,7 +529,7 @@ abstract mixin class _$ChatStateCopyWith<$Res> implements $ChatStateCopyWith<$Re
   factory _$ChatStateCopyWith(_ChatState value, $Res Function(_ChatState) _then) = __$ChatStateCopyWithImpl;
 @override @useResult
 $Res call({
- List<ChatMessageModel> messages, bool isGenerating, DateTime? startDate, DateTime? endDate
+ List<ChatMessageModel> messages, bool isGenerating, DateTime? startDate, DateTime? endDate, List<SuggestionChip> suggestionChips
 });
 
 
@@ -538,13 +546,14 @@ class __$ChatStateCopyWithImpl<$Res>
 
 /// Create a copy of ChatState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? messages = null,Object? isGenerating = null,Object? startDate = freezed,Object? endDate = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? messages = null,Object? isGenerating = null,Object? startDate = freezed,Object? endDate = freezed,Object? suggestionChips = null,}) {
   return _then(_ChatState(
 messages: null == messages ? _self._messages : messages // ignore: cast_nullable_to_non_nullable
 as List<ChatMessageModel>,isGenerating: null == isGenerating ? _self.isGenerating : isGenerating // ignore: cast_nullable_to_non_nullable
 as bool,startDate: freezed == startDate ? _self.startDate : startDate // ignore: cast_nullable_to_non_nullable
 as DateTime?,endDate: freezed == endDate ? _self.endDate : endDate // ignore: cast_nullable_to_non_nullable
-as DateTime?,
+as DateTime?,suggestionChips: null == suggestionChips ? _self._suggestionChips : suggestionChips // ignore: cast_nullable_to_non_nullable
+as List<SuggestionChip>,
   ));
 }
 

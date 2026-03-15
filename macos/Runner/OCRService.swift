@@ -1,0 +1,427 @@
+import Foundation
+import Vision
+
+// MARK: - OCR Service
+// Handles Vision text recognition and structured field extraction from OCR output.
+class OCRService {
+
+    // MARK: - Core OCR
+
+    func recognizeText(from cgImage: CGImage) -> (text: String, amount: Double?, date: String?) {
+        let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        var extractedText = ""
+        var amount: Double?
+        var date: String?
+
+        let semaphore = DispatchSemaphore(value: 0)
+
+        let request = VNRecognizeTextRequest { [weak self] (request, error) in
+            defer { semaphore.signal() }
+            guard let self = self,
+                  error == nil,
+                  let observations = request.results as? [VNRecognizedTextObservation] else { return }
+
+            for observation in observations {
+                guard let topCandidate = observation.topCandidates(1).first else { continue }
+                let text = topCandidate.string
+                extractedText += text + "\n"
+
+                if amount == nil { amount = self.extractAmountFromText(text) }
+                if date == nil { date = self.extractDateFromText(text) }
+            }
+
+            if amount == nil { amount = self.extractAmountFromText(extractedText) }
+            if date == nil { date = self.extractDateFromText(extractedText) }
+        }
+
+        request.recognitionLevel = .accurate
+        request.recognitionLanguages = ["th-TH", "en-US"]
+        request.usesLanguageCorrection = true
+
+        do {
+            try requestHandler.perform([request])
+            semaphore.wait()
+        } catch {
+            #if DEBUG
+            print("Vision error: \(error)")
+            #endif
+        }
+
+        return (extractedText, amount, date)
+    }
+
+    func buildSlipResult(text: String, amount: Double, date: String?, identifier: String) -> [String: Any] {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+        dateFormatter.timeZone = TimeZone(abbreviation: "UTC")
+
+        // Step 1: Detect bank type
+        let bankType = BankDetector.detect(text)
+        let bankPatterns = BankPatternRegistry.patterns(for: bankType)
+
+        // Step 2: Extract fields using bank-specific patterns (or legacy fallback)
+        let referenceId: String?
+        let senderName: String?
+        let receiverName: String?
+        let senderAccount: String
+        let receiverAccount: String
+
+        if let patterns = bankPatterns {
+            // Bank-specific extraction
+            referenceId = extractFieldFirstGroup(text, patterns: patterns.referenceId)
+            let names = extractNamesForBank(text, patterns: patterns)
+            senderName = names.sender
+            receiverName = names.receiver
+            let accounts = extractAccountsForBank(text, patterns: patterns.senderAccount)
+            senderAccount = accounts.count > 0 ? accounts[0] : ""
+            receiverAccount = accounts.count > 1 ? accounts[1] : ""
+        } else {
+            // Unknown bank: legacy all-patterns approach
+            referenceId = extractReferenceId(text)
+            senderName = extractSenderName(text)
+            receiverName = extractReceiverName(text)
+            let accounts = extractAccountNumbers(text)
+            senderAccount = accounts.count > 0 ? accounts[0] : ""
+            receiverAccount = accounts.count > 1 ? accounts[1] : ""
+        }
+
+        let time = extractTimeFromText(text)
+        let normalizedDate = date.map { normalizeToISODate($0) } ?? ""
+
+        // Step 3: Universal cross-bank patterns
+        let transRef = UniversalPatterns.extractTransRef(text)
+
+        return [
+            "text": String(text.prefix(10000)),
+            "amount": amount,
+            "date": String(normalizedDate.prefix(50)),
+            "assetId": String(identifier.prefix(100)),
+            "createdAt": dateFormatter.string(from: Date()),
+            "referenceId": referenceId ?? "",
+            "senderName": senderName ?? "",
+            "receiverName": receiverName ?? "",
+            "senderAccount": senderAccount,
+            "receiverAccount": receiverAccount,
+            "time": time ?? "",
+            "bankType": bankType.rawValue,
+            "transRef": transRef ?? "",
+        ]
+    }
+
+    func processImageForPaymentSlip(cgImage: CGImage, assetId: String) -> [String: Any]? {
+        let (text, amount, date) = recognizeText(from: cgImage)
+        guard let foundAmount = amount, foundAmount > 0 else { return nil }
+        return buildSlipResult(text: text, amount: foundAmount, date: date, identifier: assetId)
+    }
+
+    // MARK: - Amount Extraction
+
+    func extractAmountFromText(_ text: String) -> Double? {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        for regex in RegexPatterns.amountPatterns {
+            if let match = regex.firstMatch(in: text, options: [], range: range) {
+                let matchedText = nsText.substring(with: match.range)
+                let matchRange = NSRange(location: 0, length: (matchedText as NSString).length)
+                if let numberMatch = RegexPatterns.numberExtractor.firstMatch(
+                    in: matchedText, options: [], range: matchRange
+                ) {
+                    let numberString = (matchedText as NSString)
+                        .substring(with: numberMatch.range)
+                        .replacingOccurrences(of: ",", with: "")
+                    if let amount = Double(numberString) {
+                        return amount
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    // MARK: - Date Extraction
+
+    func extractDateFromText(_ text: String) -> String? {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        // Try combined date-time patterns first (SCB, Make, K Plus, Dime)
+        for regex in RegexPatterns.dateTimePatterns {
+            if let match = regex.firstMatch(in: text, options: [], range: range),
+               match.numberOfRanges > 1 {
+                let dateString = nsText.substring(with: match.range(at: 1))
+                if containsBuddhistYear(dateString) {
+                    return convertBuddhistToGregorian(dateString)
+                }
+                return dateString
+            }
+        }
+
+        for (regex, _) in RegexPatterns.thaiMonthPatterns {
+            if let match = regex.firstMatch(in: text, options: [], range: range) {
+                let dateString = nsText.substring(with: match.range)
+                if containsBuddhistYear(dateString) {
+                    return convertBuddhistToGregorian(dateString)
+                }
+                return dateString
+            }
+        }
+
+        for regex in RegexPatterns.datePatterns {
+            if let match = regex.firstMatch(in: text, options: [], range: range) {
+                return nsText.substring(with: match.range)
+            }
+        }
+        return nil
+    }
+
+    // MARK: - Reference / Account / Name Extraction
+
+    func extractReferenceId(_ text: String) -> String? {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        for regex in RegexPatterns.referenceIdPatterns {
+            if let match = regex.firstMatch(in: text, options: [], range: range),
+               match.numberOfRanges > 1 {
+                return nsText.substring(with: match.range(at: 1))
+            }
+        }
+        return nil
+    }
+
+    func extractName(
+        from text: String,
+        labelPatterns: [NSRegularExpression],
+        anchorMatchIndex: Int
+    ) -> String? {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        // Try label-based patterns first (SCB/Dime)
+        for regex in labelPatterns {
+            if let match = regex.firstMatch(in: text, options: [], range: range),
+               match.numberOfRanges > 1 {
+                let name = nsText.substring(with: match.range(at: 1))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty { return name }
+            }
+        }
+
+        // Try K Plus anchor (name 2 lines above mask)
+        let kplusMatches = RegexPatterns.kbankPlusNamePattern.matches(in: text, options: [], range: range)
+        if kplusMatches.count > anchorMatchIndex, kplusMatches[anchorMatchIndex].numberOfRanges > 1 {
+            let name = nsText.substring(with: kplusMatches[anchorMatchIndex].range(at: 1))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !name.isEmpty { return name }
+        }
+
+        // Try Make anchor (name directly above mask)
+        let makeMatches = RegexPatterns.kbankMakeNamePattern.matches(in: text, options: [], range: range)
+        if makeMatches.count > anchorMatchIndex, makeMatches[anchorMatchIndex].numberOfRanges > 1 {
+            let name = nsText.substring(with: makeMatches[anchorMatchIndex].range(at: 1))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !name.isEmpty { return name }
+        }
+
+        return nil
+    }
+
+    func extractSenderName(_ text: String) -> String? {
+        extractName(from: text, labelPatterns: RegexPatterns.senderNamePatterns, anchorMatchIndex: 0)
+    }
+
+    func extractReceiverName(_ text: String) -> String? {
+        extractName(from: text, labelPatterns: RegexPatterns.receiverNamePatterns, anchorMatchIndex: 1)
+    }
+
+    func extractAccountNumbers(_ text: String) -> [String] {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        // Try each pattern; for the first one that matches, return all group 1 captures
+        for regex in RegexPatterns.accountNumberPatterns {
+            let matches = regex.matches(in: text, options: [], range: range)
+            if !matches.isEmpty {
+                return matches.compactMap { match in
+                    guard match.numberOfRanges > 1 else { return nil }
+                    return nsText.substring(with: match.range(at: 1))
+                }
+            }
+        }
+        return []
+    }
+
+    func extractTimeFromText(_ text: String) -> String? {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        for regex in RegexPatterns.dateTimePatterns {
+            if let match = regex.firstMatch(in: text, options: [], range: range),
+               match.numberOfRanges > 2 {
+                return nsText.substring(with: match.range(at: 2))
+            }
+        }
+        return nil
+    }
+
+    // MARK: - Buddhist Calendar Helpers
+
+    func containsBuddhistYear(_ dateString: String) -> Bool {
+        let range = NSRange(location: 0, length: (dateString as NSString).length)
+        return RegexPatterns.buddhistYearPattern.firstMatch(in: dateString, options: [], range: range) != nil
+    }
+
+    /// Normalize any extracted date string to ISO `yyyy-MM-dd` format.
+    /// Returns the original string unchanged if no known format is recognized.
+    /// Formatters are created locally to avoid thread-safety issues with shared static DateFormatters.
+    func normalizeToISODate(_ dateStr: String) -> String {
+        let trimmed = dateStr.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let isoOutputFormatter = DateFormatter()
+        isoOutputFormatter.locale = Locale(identifier: "en_US_POSIX")
+        isoOutputFormatter.dateFormat = "yyyy-MM-dd"
+
+        let locale = Locale(identifier: "en_US")
+        let formats = [
+            "dd/MM/yyyy", "d/M/yyyy",
+            "yyyy/MM/dd",
+            "yyyy-MM-dd",
+            "dd-MM-yyyy", "d-M-yyyy",
+            "dd MMM yyyy", "d MMM yyyy",
+            "dd MMMM yyyy", "d MMMM yyyy",
+        ]
+
+        for format in formats {
+            let formatter = DateFormatter()
+            formatter.locale = locale
+            formatter.dateFormat = format
+            if let date = formatter.date(from: trimmed) {
+                return isoOutputFormatter.string(from: date)
+            }
+        }
+        return trimmed
+    }
+
+    func convertBuddhistToGregorian(_ dateString: String) -> String {
+        let monthMap = [
+            "ม.ค.": "01", "ก.พ.": "02", "มี.ค.": "03", "เม.ย.": "04",
+            "พ.ค.": "05", "มิ.ย.": "06", "ก.ค.": "07", "ส.ค.": "08",
+            "ก.ย.": "09", "ต.ค.": "10", "พ.ย.": "11", "ธ.ค.": "12"
+        ]
+
+        var result = dateString
+        for (thai, num) in monthMap {
+            result = result.replacingOccurrences(of: thai, with: "/\(num)/")
+        }
+
+        let nsResult = result as NSString
+        let range = NSRange(location: 0, length: nsResult.length)
+
+        if let match = RegexPatterns.fourDigitBuddhistYear.firstMatch(in: result, options: [], range: range) {
+            let year = nsResult.substring(with: match.range)
+            if let y = Int(year), y >= 2400, y <= 2700 {
+                result = result.replacingOccurrences(of: year, with: String(y - 543))
+            }
+        }
+
+        let nsResult2 = result as NSString
+        let range2 = NSRange(location: 0, length: nsResult2.length)
+
+        if let match = RegexPatterns.twoDigitBuddhistYear.firstMatch(in: result, options: [], range: range2) {
+            let shortYear = nsResult2.substring(with: match.range)
+            if let y = Int(shortYear), y >= 40, y <= 99 {
+                result = result.replacingOccurrences(of: shortYear, with: String(2500 + y - 543))
+            }
+        }
+
+        return result.replacingOccurrences(of: " ", with: "")
+    }
+
+    // MARK: - Bank-Aware Extraction (New Architecture)
+
+    /// Extract the first group(1) match from an ordered list of patterns.
+    private func extractFieldFirstGroup(_ text: String, patterns: [NSRegularExpression]) -> String? {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        for regex in patterns {
+            if let match = regex.firstMatch(in: text, options: [], range: range),
+               match.numberOfRanges > 1 {
+                return nsText.substring(with: match.range(at: 1))
+            }
+        }
+        return nil
+    }
+
+    /// Extract sender and receiver names using bank-specific patterns.
+    private func extractNamesForBank(_ text: String, patterns: BankPatternSet) -> (sender: String?, receiver: String?) {
+        // For banks with positional name patterns (KBank): match[0]=sender, match[1]=receiver
+        if !patterns.positionalNamePatterns.isEmpty {
+            let result = extractPositionalNames(text, patterns: patterns.positionalNamePatterns)
+            if result.sender != nil { return result }
+        }
+
+        // For label-based banks (SCB, Dime): separate sender/receiver patterns
+        let sender = extractLabelName(text, patterns: patterns.senderName)
+        let receiver = extractLabelName(text, patterns: patterns.receiverName)
+        return (sender, receiver)
+    }
+
+    /// Extract names positionally: each pattern's match[0] = sender, match[1] = receiver.
+    private func extractPositionalNames(_ text: String, patterns: [NSRegularExpression]) -> (sender: String?, receiver: String?) {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        for regex in patterns {
+            let matches = regex.matches(in: text, options: [], range: range)
+            if matches.count >= 2 {
+                let sender = nsText.substring(with: matches[0].range(at: 1))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let receiver = nsText.substring(with: matches[1].range(at: 1))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !sender.isEmpty {
+                    return (sender, receiver.isEmpty ? nil : receiver)
+                }
+            } else if matches.count == 1, matches[0].numberOfRanges > 1 {
+                let sender = nsText.substring(with: matches[0].range(at: 1))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !sender.isEmpty { return (sender, nil) }
+            }
+        }
+        return (nil, nil)
+    }
+
+    /// Extract a name using label-based patterns (first group(1) match).
+    private func extractLabelName(_ text: String, patterns: [NSRegularExpression]) -> String? {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        for regex in patterns {
+            if let match = regex.firstMatch(in: text, options: [], range: range),
+               match.numberOfRanges > 1 {
+                let name = nsText.substring(with: match.range(at: 1))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty { return name }
+            }
+        }
+        return nil
+    }
+
+    /// Extract all account numbers from the first matching pattern.
+    private func extractAccountsForBank(_ text: String, patterns: [NSRegularExpression]) -> [String] {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        for regex in patterns {
+            let matches = regex.matches(in: text, options: [], range: range)
+            if !matches.isEmpty {
+                return matches.compactMap { match in
+                    guard match.numberOfRanges > 1 else { return nil }
+                    return nsText.substring(with: match.range(at: 1))
+                }
+            }
+        }
+        return []
+    }
+}

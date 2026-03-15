@@ -2,6 +2,9 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'analysis_state.freezed.dart';
 
+/// Active view tab in the analytics dashboard
+enum AnalyticsView { summary, daily, weekly, recipients, categoryTrend }
+
 @freezed
 abstract class InsightData with _$InsightData {
   const factory InsightData({
@@ -28,6 +31,12 @@ abstract class AnalysisState with _$AnalysisState {
     DateTime? startDate,
     DateTime? endDate,
     String? error,
+    // New analytics fields
+    @Default({}) Map<String, double> dailyTotals,
+    @Default({}) Map<String, double> weeklyTotals,
+    @Default({}) Map<String, double> topRecipients,
+    @Default({}) Map<String, Map<String, double>> categoryTrend,
+    @Default(AnalyticsView.summary) AnalyticsView activeView,
   }) = _AnalysisState;
 
   /// Whether analysis has data

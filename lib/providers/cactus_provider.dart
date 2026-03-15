@@ -21,7 +21,10 @@ class Cactus extends _$Cactus {
       final prefs = await SharedPreferences.getInstance();
       final savedModel = prefs.getString(_selectedModelKey);
       if (savedModel != null) {
-        state = state.copyWith(selectedModel: savedModel);
+        state = state.copyWith(
+          selectedModel: savedModel,
+          hasExplicitlySelectedModel: true,
+        );
       }
     } catch (e) {
       // Ignore errors loading preferences
@@ -78,6 +81,7 @@ class Cactus extends _$Cactus {
         isInitializing: false,
         isModelLoaded: true,
         selectedModel: modelSlug,
+        hasExplicitlySelectedModel: true,
         downloadStatus: 'Model ready',
       );
     } catch (e) {
@@ -87,6 +91,15 @@ class Cactus extends _$Cactus {
         error: e.toString(),
       );
     }
+  }
+
+  /// Set model selection without downloading
+  Future<void> selectModel(String modelSlug) async {
+    state = state.copyWith(
+      selectedModel: modelSlug,
+      hasExplicitlySelectedModel: true,
+    );
+    await _saveModelPreference(modelSlug);
   }
 
   /// Unload the current model to free memory

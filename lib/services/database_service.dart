@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/payment_slip.dart';
@@ -27,7 +28,7 @@ class DatabaseService {
     String path = join(await getDatabasesPath(), 'payment_slips.db');
     return await openDatabase(
       path,
-      version: 5,
+      version: 8,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -54,8 +55,38 @@ class DatabaseService {
         llmProcessingStatus TEXT DEFAULT 'pending',
         ragIndexed INTEGER DEFAULT 0,
         updatedAt TEXT,
-        retryCount INTEGER DEFAULT 0
+        retryCount INTEGER DEFAULT 0,
+        isRecurring INTEGER DEFAULT 0,
+        recurringFrequency TEXT,
+        categorySource TEXT,
+        bankType TEXT,
+        transRef TEXT
       )
+    ''');
+
+    // custom_categories table
+    await db.execute('''
+      CREATE TABLE custom_categories(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        icon TEXT NOT NULL DEFAULT 'utensils',
+        color TEXT NOT NULL DEFAULT 'orange',
+        createdAt TEXT NOT NULL
+      )
+    ''');
+
+    // category_rules table
+    await db.execute('''
+      CREATE TABLE category_rules(
+        recipientPattern TEXT PRIMARY KEY,
+        category TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'user',
+        createdAt TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_category_rules_category ON category_rules(category)
     ''');
 
     // Create index for assetId to prevent duplicates
@@ -114,6 +145,48 @@ class DatabaseService {
     if (oldVersion < 5) {
       // Add retry count for capping failed extraction retries
       await db.execute('ALTER TABLE payment_slips ADD COLUMN retryCount INTEGER DEFAULT 0');
+    }
+
+    if (oldVersion < 6) {
+      // Add recurring transaction fields
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN isRecurring INTEGER DEFAULT 0');
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN recurringFrequency TEXT');
+    }
+
+    if (oldVersion < 7) {
+      // Add categorySource to payment_slips
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN categorySource TEXT');
+
+      // Create custom_categories table
+      await db.execute('''
+        CREATE TABLE custom_categories(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+          icon TEXT NOT NULL DEFAULT 'utensils',
+          color TEXT NOT NULL DEFAULT 'orange',
+          createdAt TEXT NOT NULL
+        )
+      ''');
+
+      // Create category_rules table + index
+      await db.execute('''
+        CREATE TABLE category_rules(
+          recipientPattern TEXT PRIMARY KEY,
+          category TEXT NOT NULL,
+          source TEXT NOT NULL DEFAULT 'user',
+          createdAt TEXT NOT NULL
+        )
+      ''');
+
+      await db.execute('''
+        CREATE INDEX idx_category_rules_category ON category_rules(category)
+      ''');
+    }
+
+    if (oldVersion < 8) {
+      // Add bank detection fields
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN bankType TEXT');
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN transRef TEXT');
     }
   }
 
@@ -302,6 +375,7 @@ class DatabaseService {
     String? recipientName,
     String? notes,
     String? category,
+    String? categorySource,
   }) async {
     final db = await database;
     final updates = <String, dynamic>{
@@ -310,7 +384,44 @@ class DatabaseService {
     if (recipientName != null) updates['recipientName'] = recipientName;
     if (notes != null) updates['notes'] = notes;
     if (category != null) updates['category'] = category;
+    if (categorySource != null) updates['categorySource'] = categorySource;
 
+    await db.update(
+      'payment_slips',
+      updates,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Generic field update for edit mode.
+  /// Accepts any subset of editable fields: recipientName, notes, category,
+  /// isRecurring, recurringFrequency, amount.
+  /// Always resets ragIndexed to 0 so the updated slip gets re-indexed.
+  static Future<void> updateSlipFields(int id, Map<String, dynamic> fields) async {
+    final db = await database;
+    final updates = <String, dynamic>{
+      'updatedAt': DateTime.now().toIso8601String(),
+      'ragIndexed': 0,
+    };
+    const allowedFields = {
+      'recipientName',
+      'notes',
+      'category',
+      'categorySource',
+      'isRecurring',
+      'recurringFrequency',
+      'amount',
+    };
+    for (final entry in fields.entries) {
+      if (allowedFields.contains(entry.key)) {
+        final value = entry.value;
+        // Normalise bool isRecurring → int for SQLite
+        updates[entry.key] = (entry.key == 'isRecurring' && value is bool)
+            ? (value ? 1 : 0)
+            : value;
+      }
+    }
     await db.update(
       'payment_slips',
       updates,
@@ -366,6 +477,171 @@ class DatabaseService {
       'UPDATE payment_slips SET retryCount = retryCount + 1, updatedAt = ? WHERE id = ?',
       [DateTime.now().toIso8601String(), id],
     );
+  }
+
+  // ============ Analytics Query Methods ============
+
+  /// Get daily spending totals within a date range
+  static Future<Map<String, double>> getDailyTotals(DateTime start, DateTime end) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT
+        strftime('%Y-%m-%d', date) as day,
+        SUM(amount) as total
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+      GROUP BY strftime('%Y-%m-%d', date)
+      ORDER BY day ASC
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    return {for (var row in result) row['day'] as String: (row['total'] as num).toDouble()};
+  }
+
+  /// Get weekly spending totals within a date range (ISO week)
+  static Future<Map<String, double>> getWeeklyTotals(DateTime start, DateTime end) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT
+        strftime('%Y-W%W', date) as week,
+        SUM(amount) as total,
+        COUNT(*) as count
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+      GROUP BY strftime('%Y-W%W', date)
+      ORDER BY week ASC
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    return {for (var row in result) row['week'] as String: (row['total'] as num).toDouble()};
+  }
+
+  /// Get yearly spending totals
+  static Future<Map<String, double>> getYearlyTotals() async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT
+        strftime('%Y', date) as year,
+        SUM(amount) as total
+      FROM payment_slips
+      GROUP BY strftime('%Y', date)
+      ORDER BY year ASC
+    ''');
+
+    return {for (var row in result) row['year'] as String: (row['total'] as num).toDouble()};
+  }
+
+  /// Get top recipients by total spending within a date range
+  static Future<Map<String, double>> getTopRecipients(DateTime start, DateTime end, {int limit = 10}) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT
+        COALESCE(recipientName, 'Unknown') as recipient,
+        SUM(amount) as total,
+        COUNT(*) as count
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+        AND recipientName IS NOT NULL AND recipientName != ''
+      GROUP BY recipientName
+      ORDER BY total DESC
+      LIMIT ?
+    ''', [start.toIso8601String(), end.toIso8601String(), limit]);
+
+    return {for (var row in result) row['recipient'] as String: (row['total'] as num).toDouble()};
+  }
+
+  /// Get category spending trend by month within a date range
+  static Future<Map<String, Map<String, double>>> getCategoryTrend(DateTime start, DateTime end) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT
+        strftime('%Y-%m', date) as month,
+        COALESCE(category, 'uncategorized') as cat,
+        SUM(amount) as total
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+      GROUP BY strftime('%Y-%m', date), COALESCE(category, 'uncategorized')
+      ORDER BY month ASC, total DESC
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    final trend = <String, Map<String, double>>{};
+    for (final row in result) {
+      final month = row['month'] as String;
+      final cat = row['cat'] as String;
+      final total = (row['total'] as num).toDouble();
+      trend.putIfAbsent(month, () => {})[cat] = total;
+    }
+    return trend;
+  }
+
+  /// Get spending totals grouped by day of week (0=Sunday, 6=Saturday)
+  static Future<Map<int, double>> getDayOfWeekTotals(DateTime start, DateTime end) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT
+        CAST(strftime('%w', date) AS INTEGER) as dow,
+        SUM(amount) as total,
+        COUNT(*) as count
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+      GROUP BY strftime('%w', date)
+      ORDER BY dow ASC
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    return {for (var row in result) row['dow'] as int: (row['total'] as num).toDouble()};
+  }
+
+  /// Get spending totals for a specific period (for period-over-period comparison)
+  static Future<double> getTotalForPeriod(DateTime start, DateTime end) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT COALESCE(SUM(amount), 0) as total
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    return (result.first['total'] as num).toDouble();
+  }
+
+  /// Get average spending per category over a historical period (for anomaly detection)
+  static Future<Map<String, double>> getCategoryAverages(DateTime start, DateTime end) async {
+    final db = await database;
+    // Calculate number of months in range for monthly average
+    final result = await db.rawQuery('''
+      SELECT
+        COALESCE(category, 'uncategorized') as cat,
+        SUM(amount) as total,
+        COUNT(DISTINCT strftime('%Y-%m', date)) as months
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+      GROUP BY COALESCE(category, 'uncategorized')
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    return {
+      for (var row in result)
+        row['cat'] as String: (row['total'] as num).toDouble() / math.max(1, row['months'] as int)
+    };
+  }
+
+  /// Get 3-month rolling average monthly spend per category.
+  ///
+  /// [months] controls how many past months to include (default 3).
+  /// Returns category -> average monthly spend, excluding null/empty categories.
+  static Future<Map<String, double>> getCategoryMonthlyAverages({int months = 3}) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT category, AVG(monthly_total) as avg
+      FROM (
+        SELECT category, strftime('%Y-%m', date) as month, SUM(amount) as monthly_total
+        FROM payment_slips
+        WHERE date >= date('now', '-$months months') AND category IS NOT NULL AND category != ''
+        GROUP BY category, strftime('%Y-%m', date)
+      )
+      GROUP BY category
+    ''');
+
+    return {
+      for (final row in result)
+        row['category'] as String: (row['avg'] as num).toDouble()
+    };
   }
 
   /// Get slips that haven't been indexed in RAG

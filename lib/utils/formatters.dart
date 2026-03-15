@@ -18,5 +18,8 @@ String formatDateRange(DateTime? start, DateTime? end) {
 
 String formatCategory(String category) {
   if (category.isEmpty) return 'Other';
-  return category[0].toUpperCase() + category.substring(1);
+  return category
+      .split('_')
+      .map((word) => word[0].toUpperCase() + word.substring(1))
+      .join(' ');
 }

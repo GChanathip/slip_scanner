@@ -18,12 +18,21 @@ class PaymentSlip {
   final String? recipientName;
   final String? notes;
   final String? category;
+  final String? categorySource; // 'ai' | 'rule' | null
 
   // Processing status for background queue
   final String llmProcessingStatus; // 'pending', 'processing', 'completed', 'failed'
   final bool ragIndexed;
   final DateTime? updatedAt;
   final int retryCount;
+
+  // Bank detection fields
+  final String? bankType; // BankType enum raw value (e.g. 'scb', 'kbank')
+  final String? transRef; // PromptPay transaction reference (22-25 digit NITMX ID)
+
+  // Recurring transaction fields
+  final bool isRecurring;
+  final String? recurringFrequency; // 'weekly', 'monthly', 'custom', or null
 
   PaymentSlip({
     this.id,
@@ -41,10 +50,15 @@ class PaymentSlip {
     this.recipientName,
     this.notes,
     this.category,
+    this.categorySource,
     this.llmProcessingStatus = 'pending',
     this.ragIndexed = false,
     this.updatedAt,
     this.retryCount = 0,
+    this.bankType,
+    this.transRef,
+    this.isRecurring = false,
+    this.recurringFrequency,
   });
 
   Map<String, dynamic> toMap() {
@@ -64,10 +78,15 @@ class PaymentSlip {
       'recipientName': recipientName,
       'notes': notes,
       'category': category,
+      'categorySource': categorySource,
       'llmProcessingStatus': llmProcessingStatus,
       'ragIndexed': ragIndexed ? 1 : 0,
       'updatedAt': updatedAt?.toIso8601String(),
       'retryCount': retryCount,
+      'bankType': bankType,
+      'transRef': transRef,
+      'isRecurring': isRecurring ? 1 : 0,
+      'recurringFrequency': recurringFrequency,
     };
   }
 
@@ -88,10 +107,15 @@ class PaymentSlip {
       recipientName: map['recipientName'],
       notes: map['notes'],
       category: map['category'],
+      categorySource: map['categorySource'],
       llmProcessingStatus: map['llmProcessingStatus'] ?? 'pending',
       ragIndexed: (map['ragIndexed'] ?? 0) == 1,
       updatedAt: map['updatedAt'] != null ? DateTime.parse(map['updatedAt']) : null,
       retryCount: map['retryCount'] as int? ?? 0,
+      bankType: map['bankType'] as String?,
+      transRef: map['transRef'] as String?,
+      isRecurring: (map['isRecurring'] ?? 0) == 1,
+      recurringFrequency: map['recurringFrequency'],
     );
   }
 
@@ -112,10 +136,15 @@ class PaymentSlip {
     String? recipientName,
     String? notes,
     String? category,
+    String? categorySource,
     String? llmProcessingStatus,
     bool? ragIndexed,
     DateTime? updatedAt,
     int? retryCount,
+    String? bankType,
+    String? transRef,
+    bool? isRecurring,
+    String? recurringFrequency,
   }) {
     return PaymentSlip(
       id: id ?? this.id,
@@ -133,10 +162,15 @@ class PaymentSlip {
       recipientName: recipientName ?? this.recipientName,
       notes: notes ?? this.notes,
       category: category ?? this.category,
+      categorySource: categorySource ?? this.categorySource,
       llmProcessingStatus: llmProcessingStatus ?? this.llmProcessingStatus,
       ragIndexed: ragIndexed ?? this.ragIndexed,
       updatedAt: updatedAt ?? this.updatedAt,
       retryCount: retryCount ?? this.retryCount,
+      bankType: bankType ?? this.bankType,
+      transRef: transRef ?? this.transRef,
+      isRecurring: isRecurring ?? this.isRecurring,
+      recurringFrequency: recurringFrequency ?? this.recurringFrequency,
     );
   }
 }

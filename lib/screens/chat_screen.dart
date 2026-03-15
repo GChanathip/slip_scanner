@@ -6,7 +6,9 @@ import '../providers/chat_provider.dart';
 import '../providers/chat_state.dart';
 import '../providers/cactus_provider.dart';
 import '../providers/extraction_provider.dart';
+import '../utils/ensure_model.dart';
 import '../utils/formatters.dart';
+import '../widgets/suggestion_chips_bar.dart';
 
 @RoutePage()
 class ChatScreen extends ConsumerStatefulWidget {
@@ -28,12 +30,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    // Set date range if provided
-    if (widget.startDate != null || widget.endDate != null) {
-      Future.microtask(() {
-        ref.read(chatProvider.notifier).setDateRange(widget.startDate, widget.endDate);
-      });
-    }
+    // Set date range if provided; always load suggestion chips + inject summary
+    Future.microtask(() {
+      final notifier = ref.read(chatProvider.notifier);
+      if (widget.startDate != null || widget.endDate != null) {
+        notifier.setDateRange(widget.startDate, widget.endDate);
+      } else {
+        notifier.loadSuggestionChips();
+      }
+      notifier.injectSummaryIfNeeded();
+    });
     // Ref-counted pause: extraction yields while chat is active (avoids LLM lock contention).
     // resumeExtraction() in dispose() is always called regardless of how the screen exits.
     Future.microtask(() {
@@ -45,10 +51,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Future<void> _ensureModelLoaded() async {
-    final cactusState = ref.read(cactusProvider);
-    if (!cactusState.isModelLoaded && !cactusState.isLoading) {
-      await ref.read(cactusProvider.notifier).downloadAndInitialize(cactusState.selectedModel);
-    }
+    await ensureModelLoaded(context, ref);
   }
 
   @override
@@ -136,7 +139,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     LinearProgressIndicator(value: cactusState.isDownloading ? cactusState.downloadProgress : null),
                   ] else if (cactusState.error != null) ...[
                     FAlert(
-                      style: FAlertStyle.destructive(),
+                      variant: FAlertVariant.destructive,
                       title: const Text('Model Error'),
                       subtitle: Text(cactusState.error!),
                     ),
@@ -162,6 +165,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     },
                   ),
           ),
+
+          // Suggestion chips bar — hidden while generating
+          if (!chatState.isGenerating && chatState.suggestionChips.isNotEmpty)
+            Container(
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: theme.colors.border)),
+              ),
+              child: SuggestionChipsBar(
+                chips: chatState.suggestionChips,
+                onChipTap: (chip) {
+                  ref.read(chatProvider.notifier).sendMessage(chip.query);
+                  _scrollToBottom();
+                },
+              ),
+            ),
 
           // Input area
           Container(
@@ -211,30 +229,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 24),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            alignment: WrapAlignment.center,
-            children: [
-              _buildSuggestionChip('What did I spend the most on?'),
-              _buildSuggestionChip('Show my biggest expenses'),
-              _buildSuggestionChip('Any budget advice?'),
-            ],
-          ),
         ],
       ),
-    );
-  }
-
-  Widget _buildSuggestionChip(String text) {
-    return FButton(
-      style: FButtonStyle.outline(),
-      onPress: () {
-        _messageController.text = text;
-        _sendMessage();
-      },
-      child: Text(text),
     );
   }
 

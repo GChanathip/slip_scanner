@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:cactus/cactus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import '../services/budget_service.dart';
 import '../services/database_service.dart';
 import '../services/cactus_service.dart';
 import '../models/payment_slip.dart';
@@ -64,8 +65,23 @@ class Analysis extends _$Analysis {
         monthlyTrend[monthKey] = (monthlyTrend[monthKey] ?? 0) + slip.amount;
       }
 
-      // Generate insights
-      final insights = await _generateInsights(slips, categoryBreakdown, monthlyTrend);
+      // Load detailed analytics in parallel
+      final effectiveStart = startDate ?? DateTime(2000);
+      final effectiveEnd = endDate ?? DateTime.now();
+
+      final results = await Future.wait([
+        DatabaseService.getDailyTotals(effectiveStart, effectiveEnd),
+        DatabaseService.getWeeklyTotals(effectiveStart, effectiveEnd),
+        DatabaseService.getTopRecipients(effectiveStart, effectiveEnd),
+        DatabaseService.getCategoryTrend(effectiveStart, effectiveEnd),
+        _generateInsights(slips, categoryBreakdown, monthlyTrend),
+      ]);
+
+      final dailyTotals = results[0] as Map<String, double>;
+      final weeklyTotals = results[1] as Map<String, double>;
+      final topRecipients = results[2] as Map<String, double>;
+      final categoryTrend = results[3] as Map<String, Map<String, double>>;
+      final insights = results[4] as List<InsightData>;
 
       state = state.copyWith(
         categoryBreakdown: categoryBreakdown,
@@ -74,6 +90,10 @@ class Analysis extends _$Analysis {
         transactionCount: count,
         averageTransaction: avg,
         insights: insights,
+        dailyTotals: dailyTotals,
+        weeklyTotals: weeklyTotals,
+        topRecipients: topRecipients,
+        categoryTrend: categoryTrend,
         isLoading: false,
       );
     } catch (e) {
@@ -91,8 +111,8 @@ class Analysis extends _$Analysis {
     Map<String, double> categories,
     Map<String, double> monthly,
   ) async {
-    // Always include basic insights
-    final basicInsights = _generateBasicInsights(slips, categories, monthly);
+    // Always include basic insights (now async for richer data)
+    final basicInsights = await _generateBasicInsights(slips, categories, monthly);
 
     // Try to get AI-powered insights if model is loaded
     if (!CactusService.instance.isLoaded) {
@@ -101,7 +121,6 @@ class Analysis extends _$Analysis {
 
     try {
       final aiInsights = await _generateAIInsights(slips, categories, monthly);
-      // Combine: AI insights first, then basic insights
       return [...aiInsights, ...basicInsights];
     } catch (e) {
       debugPrint('AI insights failed: $e');
@@ -109,14 +128,61 @@ class Analysis extends _$Analysis {
     }
   }
 
-  /// Generate basic statistical insights
-  List<InsightData> _generateBasicInsights(
+  /// Generate basic statistical insights enriched with pattern data
+  Future<List<InsightData>> _generateBasicInsights(
     List<PaymentSlip> slips,
     Map<String, double> categories,
     Map<String, double> monthly,
-  ) {
+  ) async {
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     final insights = <InsightData>[];
     final total = slips.fold<double>(0, (sum, s) => sum + s.amount);
+
+    // Budget alerts
+    try {
+      final overallBudget = await BudgetService.getOverallBudget();
+      if (overallBudget > 0) {
+        final now = DateTime.now();
+        final monthStart = DateTime(now.year, now.month, 1);
+        final monthSpent = await DatabaseService.getTotalForPeriod(monthStart, now);
+        final pct = monthSpent / overallBudget * 100;
+        if (pct >= 100) {
+          insights.add(InsightData(
+            title: 'Budget Exceeded',
+            description: 'You\'ve spent ${formatCurrencyCompact(monthSpent)} of your ${formatCurrencyCompact(overallBudget)} budget (${pct.toStringAsFixed(0)}%)',
+            type: 'anomaly',
+            value: pct,
+            icon: 'alert',
+          ));
+        } else if (pct >= 90) {
+          insights.add(InsightData(
+            title: 'Budget Critical',
+            description: '${pct.toStringAsFixed(0)}% of monthly budget used — ${formatCurrencyCompact(overallBudget - monthSpent)} remaining',
+            type: 'anomaly',
+            value: pct,
+            icon: 'alert',
+          ));
+        } else if (pct >= 75) {
+          insights.add(InsightData(
+            title: 'Budget Warning',
+            description: '${pct.toStringAsFixed(0)}% of monthly budget used — ${formatCurrencyCompact(overallBudget - monthSpent)} remaining',
+            type: 'trend',
+            value: pct,
+            icon: 'trending_up',
+          ));
+        } else if (pct >= 50) {
+          insights.add(InsightData(
+            title: 'Budget Halfway',
+            description: '${pct.toStringAsFixed(0)}% of monthly budget used — on track',
+            type: 'trend',
+            value: pct,
+            icon: 'info',
+          ));
+        }
+      }
+    } catch (e) {
+      debugPrint('Budget insight failed: $e');
+    }
 
     // Top category
     if (categories.isNotEmpty) {
@@ -131,7 +197,7 @@ class Analysis extends _$Analysis {
       ));
     }
 
-    // Monthly comparison (if we have multiple months)
+    // Monthly comparison
     if (monthly.length >= 2) {
       final sortedMonths = monthly.entries.toList()..sort((a, b) => b.key.compareTo(a.key));
       if (sortedMonths.length >= 2) {
@@ -163,6 +229,123 @@ class Analysis extends _$Analysis {
         value: largeTransactions.length.toDouble(),
         icon: 'alert',
       ));
+    }
+
+    // Day-of-week pattern
+    try {
+      final start = state.startDate ?? DateTime(2000);
+      final end = state.endDate ?? DateTime.now();
+      final dowTotals = await DatabaseService.getDayOfWeekTotals(start, end);
+      if (dowTotals.length >= 3) {
+        final weekdayTotal = [1, 2, 3, 4, 5].fold(0.0, (s, d) => s + (dowTotals[d] ?? 0));
+        final weekendTotal = [0, 6].fold(0.0, (s, d) => s + (dowTotals[d] ?? 0));
+        final allTotal = weekdayTotal + weekendTotal;
+        if (allTotal > 0 && weekendTotal > 0) {
+          final weekendPct = (weekendTotal / allTotal * 100);
+          // Weekend is 2/7 = 28.6%, flag if significantly above
+          if (weekendPct > 35) {
+            insights.add(InsightData(
+              title: 'Weekend Spender',
+              description: '${weekendPct.toStringAsFixed(0)}% of spending happens on weekends',
+              type: 'trend',
+              value: weekendPct,
+              icon: 'chart',
+            ));
+          }
+        }
+        // Highlight the highest spending day
+        final topDay = dowTotals.entries.reduce((a, b) => a.value > b.value ? a : b);
+        final dowAvg = dowTotals.values.reduce((a, b) => a + b) / dowTotals.length;
+        if (topDay.value > dowAvg * 1.5) {
+          insights.add(InsightData(
+            title: '${dayNames[topDay.key]} Peak',
+            description: 'You spend ${((topDay.value / dowAvg - 1) * 100).toStringAsFixed(0)}% more on ${dayNames[topDay.key]}s',
+            type: 'trend',
+            value: topDay.value,
+            icon: 'chart',
+          ));
+        }
+      }
+    } catch (e) {
+      debugPrint('Day-of-week insight failed: $e');
+    }
+
+    // Spending velocity
+    try {
+      final now = DateTime.now();
+      final currentMonthStart = DateTime(now.year, now.month, 1);
+      final lastMonthStart = DateTime(now.year, now.month - 1, 1);
+      final lastMonthEnd = DateTime(now.year, now.month, 0, 23, 59, 59);
+      final dayOfMonth = now.day;
+      final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+
+      final currentTotal = await DatabaseService.getTotalForPeriod(currentMonthStart, now);
+      final lastTotal = await DatabaseService.getTotalForPeriod(lastMonthStart, lastMonthEnd);
+
+      if (currentTotal > 0 && lastTotal > 0 && dayOfMonth > 3) {
+        final projectedTotal = (currentTotal / dayOfMonth) * daysInMonth;
+        final diff = projectedTotal - lastTotal;
+        final pct = (diff / lastTotal * 100);
+        if (pct.abs() > 10) {
+          insights.add(InsightData(
+            title: 'Spending Velocity',
+            description: 'At current rate, you\'ll spend ${formatCurrencyCompact(projectedTotal)} this month vs. ${formatCurrencyCompact(lastTotal)} last month (${pct > 0 ? '+' : ''}${pct.toStringAsFixed(0)}%)',
+            type: pct > 20 ? 'anomaly' : 'trend',
+            value: pct,
+            icon: pct > 0 ? 'trending_up' : 'trending_down',
+          ));
+        }
+      }
+    } catch (e) {
+      debugPrint('Spending velocity insight failed: $e');
+    }
+
+    // Recipient concentration
+    try {
+      final start = state.startDate ?? DateTime(2000);
+      final end = state.endDate ?? DateTime.now();
+      final topRecipients = await DatabaseService.getTopRecipients(start, end, limit: 3);
+      if (topRecipients.isNotEmpty && total > 0) {
+        final topTotal = topRecipients.values.fold(0.0, (s, v) => s + v);
+        final topPct = (topTotal / total * 100);
+        if (topPct > 40) {
+          insights.add(InsightData(
+            title: 'Recipient Concentration',
+            description: 'Top ${topRecipients.length} recipients account for ${topPct.toStringAsFixed(0)}% of spending',
+            type: 'suggestion',
+            value: topPct,
+            icon: 'info',
+          ));
+        }
+      }
+    } catch (e) {
+      debugPrint('Recipient insight failed: $e');
+    }
+
+    // Category anomaly detection (spike vs. historical average)
+    try {
+      final now = DateTime.now();
+      final histStart = DateTime(now.year, now.month - 3, 1);
+      final histEnd = DateTime(now.year, now.month, 0, 23, 59, 59);
+      final historicalAvgs = await DatabaseService.getCategoryAverages(histStart, histEnd);
+
+      for (final entry in categories.entries) {
+        final histAvg = historicalAvgs[entry.key];
+        if (histAvg != null && histAvg > 0) {
+          final spike = ((entry.value - histAvg) / histAvg * 100);
+          if (spike > 50) {
+            insights.add(InsightData(
+              title: '${formatCategory(entry.key)} Spike',
+              description: '${formatCategory(entry.key)} spending is ${spike.toStringAsFixed(0)}% above 3-month average',
+              type: 'anomaly',
+              value: spike,
+              icon: 'alert',
+            ));
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Category anomaly insight failed: $e');
     }
 
     return insights;
@@ -231,5 +414,10 @@ Focus on actionable budget advice. Keep it brief.''';
   /// Set date range and reload
   Future<void> setDateRange(DateTime? start, DateTime? end) async {
     await loadAnalysis(startDate: start, endDate: end);
+  }
+
+  /// Switch active analytics view
+  void setActiveView(AnalyticsView view) {
+    state = state.copyWith(activeView: view);
   }
 }

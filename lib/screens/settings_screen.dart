@@ -6,6 +6,7 @@ import 'package:forui/forui.dart';
 import 'package:slip_scanner/providers/cactus_state.dart';
 import '../providers/cactus_provider.dart';
 import '../providers/extraction_provider.dart';
+import '../router/app_router.dart';
 import '../services/cactus_service.dart';
 
 @RoutePage()
@@ -78,7 +79,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   const SizedBox(height: 12),
                   FButton(
-                    style: FButtonStyle.outline(),
+                    variant: FButtonVariant.outline,
                     onPress: () {
                       ref.read(cactusProvider.notifier).unloadModel();
                       ref.read(extractionQueueProvider.notifier).stopBackgroundProcessing();
@@ -96,7 +97,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ] else if (cactusState.error != null) ...[
                   FAlert(
-                    style: FAlertStyle.destructive(),
+                    variant: FAlertVariant.destructive,
                     title: const Text('Error'),
                     subtitle: Text(cactusState.error!),
                   ),
@@ -128,6 +129,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           const SizedBox(height: 16),
 
+          // Categories Card
+          FCard(
+            title: const Text('Categories'),
+            subtitle: const Text('Manage custom expense categories.'),
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                FButton(
+                  variant: FButtonVariant.outline,
+                  onPress: () => context.router.push(const CategoryManagementRoute()),
+                  prefix: const Icon(FIcons.tag),
+                  child: const Text('Manage Categories'),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
           // Background Processing Card
           FCard(
             title: const Text('Background Processing'),
@@ -143,7 +163,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 if (extractionState.failedCount > 0) ...[
                   const SizedBox(height: 12),
                   FButton(
-                    style: FButtonStyle.outline(),
+                    variant: FButtonVariant.outline,
                     onPress: () {
                       ref.read(extractionQueueProvider.notifier).retryFailed();
                     },

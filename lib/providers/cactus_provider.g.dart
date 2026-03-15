@@ -40,7 +40,7 @@ final class CactusProvider extends $NotifierProvider<Cactus, CactusState> {
   }
 }
 
-String _$cactusHash() => r'5efac546d4c501c3f3c328f16529238c1ca6ed70';
+String _$cactusHash() => r'2bf265ebd3455aef75d55697d6b94efd15ec42ad';
 
 abstract class _$Cactus extends $Notifier<CactusState> {
   CactusState build();

@@ -1,6 +1,6 @@
-import 'package:flutter/services.dart';
 import 'dart:async';
-import 'dart:typed_data';
+
+import 'package:flutter/services.dart';
 
 class PlatformService {
   static const MethodChannel _channel = MethodChannel('com.example.slip_scanner/vision');
@@ -86,6 +86,20 @@ class PlatformService {
     _progressController = null;
     _partialResultsController?.close();
     _partialResultsController = null;
+  }
+
+  /// Process raw image data through OCR (macOS server path).
+  /// Returns structured slip result or null if not a payment slip.
+  static Future<Map<String, dynamic>?> processImageData(Uint8List imageData) async {
+    try {
+      final result = await _channel.invokeMethod('processImageData', {
+        'imageData': imageData,
+      });
+      if (result == null) return null;
+      return Map<String, dynamic>.from(result);
+    } on PlatformException catch (e) {
+      throw Exception('Failed to process image data: ${e.message}');
+    }
   }
 
   static Future<Map<String, dynamic>> scanPaymentSlip(String imagePath) async {

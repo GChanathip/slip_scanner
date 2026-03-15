@@ -13,6 +13,7 @@ abstract class CactusState with _$CactusState {
     @Default(0.0) double downloadProgress,
     @Default('') String downloadStatus,
     @Default('qwen3-0.6') String selectedModel,
+    @Default(false) bool hasExplicitlySelectedModel,
     String? error,
   }) = _CactusState;
 

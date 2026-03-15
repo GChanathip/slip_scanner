@@ -1,19 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
 import 'package:intl/intl.dart';
+import '../models/category_registry.dart';
 import '../models/payment_slip.dart';
 import '../utils/formatters.dart';
-
-const _categoryIcons = <String, IconData>{
-  'food': FIcons.utensils,
-  'transport': FIcons.car,
-  'utilities': FIcons.zap,
-  'shopping': FIcons.shoppingBag,
-  'transfer': FIcons.arrowRightLeft,
-  'entertainment': FIcons.gamepad2,
-  'health': FIcons.heart,
-  'education': FIcons.graduationCap,
-};
 
 class SlipListTile extends StatelessWidget {
   final PaymentSlip slip;
@@ -28,7 +18,7 @@ class SlipListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.theme;
-    final categoryIcon = _categoryIcons[slip.category?.toLowerCase()] ?? FIcons.circle;
+    final categoryIcon = getCategoryIcon(slip.category?.toLowerCase());
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),

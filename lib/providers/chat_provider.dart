@@ -1,8 +1,13 @@
 import 'package:cactus/cactus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/cactus_service.dart';
-import '../services/database_service.dart';
+import '../services/chat_query_service.dart';
+import '../services/monthly_summary_service.dart';
+import '../services/suggestion_chip_service.dart';
+import 'analysis_provider.dart';
+import 'budget_provider.dart';
 import 'chat_state.dart';
 
 part 'chat_provider.g.dart';
@@ -12,9 +17,18 @@ class Chat extends _$Chat {
   @override
   ChatState build() => const ChatState();
 
+  /// Load contextual suggestion chips from analysis + budget state.
+  void loadSuggestionChips() {
+    final analysis = ref.read(analysisProvider);
+    final budget = ref.read(budgetProvider);
+    final chips = SuggestionChipService.generate(analysis, budget);
+    state = state.copyWith(suggestionChips: chips);
+  }
+
   /// Set date range filter for analysis
   void setDateRange(DateTime? start, DateTime? end) {
     state = state.copyWith(startDate: start, endDate: end);
+    loadSuggestionChips();
   }
 
   /// Send a message and get AI response
@@ -46,15 +60,28 @@ class Chat extends _$Chat {
       }
 
       // Get summary stats for date range
-      final stats = await _getStatsForDateRange();
+      final stats = await ChatQueryService.getStatsForDateRange(
+        startDate: state.startDate,
+        endDate: state.endDate,
+      );
 
       // Build system prompt with context
-      final systemPrompt = _buildSystemPrompt(stats, ragContext);
+      final systemPrompt = ChatQueryService.buildSystemPrompt(
+        stats: stats,
+        ragContext: ragContext,
+        startDate: state.startDate,
+        endDate: state.endDate,
+      );
+
+      // Limit message history to avoid exceeding context window
+      final recentMessages = state.messages.length > 20
+          ? state.messages.sublist(state.messages.length - 20)
+          : state.messages;
 
       // Create message list for LLM
       final llmMessages = [
         ChatMessage(content: systemPrompt, role: 'system'),
-        ...state.messages.map((m) => ChatMessage(content: m.content, role: m.role)),
+        ...recentMessages.map((m) => ChatMessage(content: m.content, role: m.role)),
       ];
 
       // Stream response
@@ -105,70 +132,32 @@ class Chat extends _$Chat {
     }
   }
 
-  /// Build system prompt with context
-  String _buildSystemPrompt(String stats, String ragContext) {
-    final dateRangeStr = state.startDate != null && state.endDate != null
-        ? '${state.startDate!.toIso8601String().split('T')[0]} to ${state.endDate!.toIso8601String().split('T')[0]}'
-        : 'all time';
-
-    return '''You are a helpful expense tracking assistant for a Thai banking slip scanner app.
-You help users understand their spending patterns and provide financial insights.
-
-Current date range filter: $dateRangeStr
-
-$stats
-
-${ragContext.isNotEmpty ? 'Relevant expense records:\n$ragContext' : ''}
-
-Guidelines:
-- Be concise and helpful
-- Format currency amounts clearly (e.g., 1,234.56 baht)
-- Provide actionable insights when appropriate
-- If asked about specific transactions, reference the data above
-- For budget advice, be practical and non-judgmental
-- Answer in the same language the user uses (Thai or English)''';
-  }
-
-  /// Get summary statistics for the selected date range
-  Future<String> _getStatsForDateRange() async {
+  /// Inject last month's summary as the first assistant message, once per month.
+  Future<void> injectSummaryIfNeeded() async {
+    if (state.hasMessages) return;
     try {
-      final slips = await DatabaseService.getPaymentSlipsInRange(
-        state.startDate ?? DateTime(2000),
-        state.endDate ?? DateTime.now(),
+      final now = DateTime.now();
+      final prev = now.month == 1 ? DateTime(now.year - 1, 12) : DateTime(now.year, now.month - 1);
+      final monthKey = '${prev.year}-${prev.month.toString().padLeft(2, '0')}';
+      final summary = await MonthlySummaryService.instance.getSummary(monthKey);
+      if (summary == null) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'chat_summary_injected_$monthKey';
+      if (prefs.getBool(key) == true) return;
+      await prefs.setBool(key, true);
+
+      state = state.copyWith(
+        messages: [
+          ChatMessageModel(
+            role: 'assistant',
+            content: summary.narrative,
+            timestamp: DateTime.now(),
+          ),
+        ],
       );
-
-      if (slips.isEmpty) {
-        return 'Summary: No expense records found for this period.';
-      }
-
-      final total = slips.fold<double>(0, (sum, s) => sum + s.amount);
-      final count = slips.length;
-      final avg = count > 0 ? total / count : 0;
-
-      // Group by category
-      final byCategory = <String, double>{};
-      for (final slip in slips) {
-        final cat = slip.category ?? 'uncategorized';
-        byCategory[cat] = (byCategory[cat] ?? 0) + slip.amount;
-      }
-
-      // Sort categories by amount
-      final sortedCategories = byCategory.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
-
-      final categoryStr = sortedCategories
-          .take(5)
-          .map((e) => '${e.key}: ${e.value.toStringAsFixed(2)} baht')
-          .join(', ');
-
-      return '''Summary statistics for this period:
-- Total spending: ${total.toStringAsFixed(2)} baht
-- Transaction count: $count
-- Average transaction: ${avg.toStringAsFixed(2)} baht
-- Top categories: $categoryStr''';
     } catch (e) {
-      debugPrint('Error getting stats: $e');
-      return 'Summary: Unable to load statistics.';
+      debugPrint('ChatProvider: summary injection failed: $e');
     }
   }
 
