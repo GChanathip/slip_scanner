@@ -32,6 +32,14 @@
 		AABB00011234567800000004 /* RegexPatterns.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB00011234567800000001 /* RegexPatterns.swift */; };
 		AABB00011234567800000005 /* OCRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB00011234567800000002 /* OCRService.swift */; };
 		AABB00011234567800000006 /* SlipProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB00011234567800000003 /* SlipProcessor.swift */; };
+		5969025D15A6EE8BA4CC5F39 /* BankType.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE76CF37D052BD6D8736B354 /* BankType.swift */; };
+		335134BFD18336743CE2983B /* BankPatternSet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E74B9348B8D7EE0C0F2E451B /* BankPatternSet.swift */; };
+		680667A0AC554C7E175E2D95 /* BankDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48F3EF75E46792D14AC08064 /* BankDetector.swift */; };
+		732A60E9B117CB810DD3D720 /* UniversalPatterns.swift in Sources */ = {isa = PBXBuildFile; fileRef = 885B82B2E740C4CC7F370C63 /* UniversalPatterns.swift */; };
+		6F0E822EB1A4788CBD64CB6F /* SCBPatterns.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E94B865EAD56D32173724FC /* SCBPatterns.swift */; };
+		0F0F57C8FC60E97A9E539529 /* KBankPatterns.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCC56A55737B655530D0A6F /* KBankPatterns.swift */; };
+		3ABDF66A7478F2693341C860 /* DimePatterns.swift in Sources */ = {isa = PBXBuildFile; fileRef = 485F2C93641FC15008D8DC53 /* DimePatterns.swift */; };
+		4318AE143CBE8C8CC20FB74B /* BankPatternRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5E914D21AA8A637A645B0B6 /* BankPatternRegistry.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -94,6 +102,14 @@
 		C7FF9D6747EE74D098A6D24F /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
 		E276AD96212E43D6345D87CE /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		E4822DD552167D3C90454F24 /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
+		EE76CF37D052BD6D8736B354 /* BankType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankType.swift; sourceTree = "<group>"; };
+		E74B9348B8D7EE0C0F2E451B /* BankPatternSet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankPatternSet.swift; sourceTree = "<group>"; };
+		48F3EF75E46792D14AC08064 /* BankDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankDetector.swift; sourceTree = "<group>"; };
+		885B82B2E740C4CC7F370C63 /* UniversalPatterns.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UniversalPatterns.swift; sourceTree = "<group>"; };
+		1E94B865EAD56D32173724FC /* SCBPatterns.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SCBPatterns.swift; sourceTree = "<group>"; };
+		3DCC56A55737B655530D0A6F /* KBankPatterns.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBankPatterns.swift; sourceTree = "<group>"; };
+		485F2C93641FC15008D8DC53 /* DimePatterns.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DimePatterns.swift; sourceTree = "<group>"; };
+		B5E914D21AA8A637A645B0B6 /* BankPatternRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankPatternRegistry.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -186,6 +202,7 @@
 				AABB00011234567800000001 /* RegexPatterns.swift */,
 				AABB00011234567800000002 /* OCRService.swift */,
 				AABB00011234567800000003 /* SlipProcessor.swift */,
+				84AD78850762199026A9D157 /* BankDetection */,
 				33E51913231747F40026EE4D /* DebugProfile.entitlements */,
 				33E51914231749380026EE4D /* Release.entitlements */,
 				33CC11242044D66E0003C045 /* Resources */,
@@ -214,6 +231,21 @@
 				AEF68FDE25322D5037FE96B6 /* Pods-RunnerTests.profile.xcconfig */,
 			);
 			path = Pods;
+			sourceTree = "<group>";
+		};
+		84AD78850762199026A9D157 /* BankDetection */ = {
+			isa = PBXGroup;
+			children = (
+				EE76CF37D052BD6D8736B354 /* BankType.swift */,
+				E74B9348B8D7EE0C0F2E451B /* BankPatternSet.swift */,
+				48F3EF75E46792D14AC08064 /* BankDetector.swift */,
+				885B82B2E740C4CC7F370C63 /* UniversalPatterns.swift */,
+				1E94B865EAD56D32173724FC /* SCBPatterns.swift */,
+				3DCC56A55737B655530D0A6F /* KBankPatterns.swift */,
+				485F2C93641FC15008D8DC53 /* DimePatterns.swift */,
+				B5E914D21AA8A637A645B0B6 /* BankPatternRegistry.swift */,
+			);
+			path = BankDetection;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -450,6 +482,14 @@
 				AABB00011234567800000004 /* RegexPatterns.swift in Sources */,
 				AABB00011234567800000005 /* OCRService.swift in Sources */,
 				AABB00011234567800000006 /* SlipProcessor.swift in Sources */,
+				5969025D15A6EE8BA4CC5F39 /* BankType.swift in Sources */,
+				335134BFD18336743CE2983B /* BankPatternSet.swift in Sources */,
+				680667A0AC554C7E175E2D95 /* BankDetector.swift in Sources */,
+				732A60E9B117CB810DD3D720 /* UniversalPatterns.swift in Sources */,
+				6F0E822EB1A4788CBD64CB6F /* SCBPatterns.swift in Sources */,
+				0F0F57C8FC60E97A9E539529 /* KBankPatterns.swift in Sources */,
+				3ABDF66A7478F2693341C860 /* DimePatterns.swift in Sources */,
+				4318AE143CBE8C8CC20FB74B /* BankPatternRegistry.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

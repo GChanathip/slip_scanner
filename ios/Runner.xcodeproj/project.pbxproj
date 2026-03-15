@@ -27,6 +27,15 @@
 		CCDD001122334455AA000006 /* BuddhistCalendarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB001122334455AA000006 /* BuddhistCalendarTests.swift */; };
 		CCDD001122334455AA000007 /* BuildSlipResultTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB001122334455AA000007 /* BuildSlipResultTests.swift */; };
 		CCDD001122334455AA000008 /* OCRImageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB001122334455AA000008 /* OCRImageTests.swift */; };
+		836A9A83475F1860D43C8A5A /* BankType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 876177986043EDB3736CE288 /* BankType.swift */; };
+		6035F5D632CC8DC37D121F99 /* BankPatternSet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D221FF2791B7D0C87D8A3AA /* BankPatternSet.swift */; };
+		7983BCF4BC94881E3D8491A6 /* BankDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 932F6F4F2BB642062DEC0003 /* BankDetector.swift */; };
+		3418851A41B623EE9620B64F /* UniversalPatterns.swift in Sources */ = {isa = PBXBuildFile; fileRef = D66E4912AA8D73738167F29E /* UniversalPatterns.swift */; };
+		A6180E75F47F910B1A28C082 /* SCBPatterns.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86D7AD1C81BD062DB938B3B2 /* SCBPatterns.swift */; };
+		F5376E35DC400026425DC25C /* KBankPatterns.swift in Sources */ = {isa = PBXBuildFile; fileRef = D66EEB7C2812831DFEF89596 /* KBankPatterns.swift */; };
+		6515BAFF042BB8F0E6631962 /* DimePatterns.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F6370AE98807A832B63744D /* DimePatterns.swift */; };
+		F3AE94C495327C3ED998F5AF /* BankPatternRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = F21F493E02ABB683EAC7D6B8 /* BankPatternRegistry.swift */; };
+		CB8B9581B1182037FE78D893 /* BankDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 789C3B8DD635564E53CBA8BC /* BankDetectorTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -87,6 +96,15 @@
 		AABB001122334455AA000006 /* BuddhistCalendarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuddhistCalendarTests.swift; sourceTree = "<group>"; };
 		AABB001122334455AA000007 /* BuildSlipResultTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildSlipResultTests.swift; sourceTree = "<group>"; };
 		AABB001122334455AA000008 /* OCRImageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRImageTests.swift; sourceTree = "<group>"; };
+		876177986043EDB3736CE288 /* BankType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankType.swift; sourceTree = "<group>"; };
+		5D221FF2791B7D0C87D8A3AA /* BankPatternSet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankPatternSet.swift; sourceTree = "<group>"; };
+		932F6F4F2BB642062DEC0003 /* BankDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankDetector.swift; sourceTree = "<group>"; };
+		D66E4912AA8D73738167F29E /* UniversalPatterns.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UniversalPatterns.swift; sourceTree = "<group>"; };
+		86D7AD1C81BD062DB938B3B2 /* SCBPatterns.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SCBPatterns.swift; sourceTree = "<group>"; };
+		D66EEB7C2812831DFEF89596 /* KBankPatterns.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KBankPatterns.swift; sourceTree = "<group>"; };
+		7F6370AE98807A832B63744D /* DimePatterns.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DimePatterns.swift; sourceTree = "<group>"; };
+		F21F493E02ABB683EAC7D6B8 /* BankPatternRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankPatternRegistry.swift; sourceTree = "<group>"; };
+		789C3B8DD635564E53CBA8BC /* BankDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BankDetectorTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -128,6 +146,7 @@
 				AABB001122334455AA000006 /* BuddhistCalendarTests.swift */,
 				AABB001122334455AA000007 /* BuildSlipResultTests.swift */,
 				AABB001122334455AA000008 /* OCRImageTests.swift */,
+				789C3B8DD635564E53CBA8BC /* BankDetectorTests.swift */,
 				AABB001122334455AA000009 /* Fixtures */,
 			);
 			path = RunnerTests;
@@ -177,6 +196,7 @@
 		97C146F01CF9000F007C117D /* Runner */ = {
 			isa = PBXGroup;
 			children = (
+				AF9CA12DDEC33E9A7BBBC3D1 /* BankDetection */,
 				97C146FA1CF9000F007C117D /* Main.storyboard */,
 				97C146FD1CF9000F007C117D /* Assets.xcassets */,
 				97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */,
@@ -203,6 +223,21 @@
 				5CE9597000F8327B477AA7FE /* Pods-RunnerTests.profile.xcconfig */,
 			);
 			path = Pods;
+			sourceTree = "<group>";
+		};
+		AF9CA12DDEC33E9A7BBBC3D1 /* BankDetection */ = {
+			isa = PBXGroup;
+			children = (
+				876177986043EDB3736CE288 /* BankType.swift */,
+				5D221FF2791B7D0C87D8A3AA /* BankPatternSet.swift */,
+				932F6F4F2BB642062DEC0003 /* BankDetector.swift */,
+				D66E4912AA8D73738167F29E /* UniversalPatterns.swift */,
+				86D7AD1C81BD062DB938B3B2 /* SCBPatterns.swift */,
+				D66EEB7C2812831DFEF89596 /* KBankPatterns.swift */,
+				7F6370AE98807A832B63744D /* DimePatterns.swift */,
+				F21F493E02ABB683EAC7D6B8 /* BankPatternRegistry.swift */,
+			);
+			path = BankDetection;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -436,6 +471,7 @@
 				CCDD001122334455AA000006 /* BuddhistCalendarTests.swift in Sources */,
 				CCDD001122334455AA000007 /* BuildSlipResultTests.swift in Sources */,
 				CCDD001122334455AA000008 /* OCRImageTests.swift in Sources */,
+				CB8B9581B1182037FE78D893 /* BankDetectorTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -448,6 +484,14 @@
 				942831D700194F32BBE460FE /* OCRService.swift in Sources */,
 				A12EB517B77648A680FB616A /* PhotoScanner.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
+				836A9A83475F1860D43C8A5A /* BankType.swift in Sources */,
+				6035F5D632CC8DC37D121F99 /* BankPatternSet.swift in Sources */,
+				7983BCF4BC94881E3D8491A6 /* BankDetector.swift in Sources */,
+				3418851A41B623EE9620B64F /* UniversalPatterns.swift in Sources */,
+				A6180E75F47F910B1A28C082 /* SCBPatterns.swift in Sources */,
+				F5376E35DC400026425DC25C /* KBankPatterns.swift in Sources */,
+				6515BAFF042BB8F0E6631962 /* DimePatterns.swift in Sources */,
+				F3AE94C495327C3ED998F5AF /* BankPatternRegistry.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

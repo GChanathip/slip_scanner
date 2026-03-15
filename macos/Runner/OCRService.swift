@@ -55,13 +55,41 @@ class OCRService {
         dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
         dateFormatter.timeZone = TimeZone(abbreviation: "UTC")
 
-        let referenceId = extractReferenceId(text)
-        let senderName = extractSenderName(text)
-        let receiverName = extractReceiverName(text)
-        let time = extractTimeFromText(text)
-        let accounts = extractAccountNumbers(text)
+        // Step 1: Detect bank type
+        let bankType = BankDetector.detect(text)
+        let bankPatterns = BankPatternRegistry.patterns(for: bankType)
 
+        // Step 2: Extract fields using bank-specific patterns (or legacy fallback)
+        let referenceId: String?
+        let senderName: String?
+        let receiverName: String?
+        let senderAccount: String
+        let receiverAccount: String
+
+        if let patterns = bankPatterns {
+            // Bank-specific extraction
+            referenceId = extractFieldFirstGroup(text, patterns: patterns.referenceId)
+            let names = extractNamesForBank(text, patterns: patterns)
+            senderName = names.sender
+            receiverName = names.receiver
+            let accounts = extractAccountsForBank(text, patterns: patterns.senderAccount)
+            senderAccount = accounts.count > 0 ? accounts[0] : ""
+            receiverAccount = accounts.count > 1 ? accounts[1] : ""
+        } else {
+            // Unknown bank: legacy all-patterns approach
+            referenceId = extractReferenceId(text)
+            senderName = extractSenderName(text)
+            receiverName = extractReceiverName(text)
+            let accounts = extractAccountNumbers(text)
+            senderAccount = accounts.count > 0 ? accounts[0] : ""
+            receiverAccount = accounts.count > 1 ? accounts[1] : ""
+        }
+
+        let time = extractTimeFromText(text)
         let normalizedDate = date.map { normalizeToISODate($0) } ?? ""
+
+        // Step 3: Universal cross-bank patterns
+        let transRef = UniversalPatterns.extractTransRef(text)
 
         return [
             "text": String(text.prefix(10000)),
@@ -72,9 +100,11 @@ class OCRService {
             "referenceId": referenceId ?? "",
             "senderName": senderName ?? "",
             "receiverName": receiverName ?? "",
-            "senderAccount": accounts.count > 0 ? accounts[0] : "",
-            "receiverAccount": accounts.count > 1 ? accounts[1] : "",
+            "senderAccount": senderAccount,
+            "receiverAccount": receiverAccount,
             "time": time ?? "",
+            "bankType": bankType.rawValue,
+            "transRef": transRef ?? "",
         ]
     }
 
@@ -306,5 +336,92 @@ class OCRService {
         }
 
         return result.replacingOccurrences(of: " ", with: "")
+    }
+
+    // MARK: - Bank-Aware Extraction (New Architecture)
+
+    /// Extract the first group(1) match from an ordered list of patterns.
+    private func extractFieldFirstGroup(_ text: String, patterns: [NSRegularExpression]) -> String? {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        for regex in patterns {
+            if let match = regex.firstMatch(in: text, options: [], range: range),
+               match.numberOfRanges > 1 {
+                return nsText.substring(with: match.range(at: 1))
+            }
+        }
+        return nil
+    }
+
+    /// Extract sender and receiver names using bank-specific patterns.
+    private func extractNamesForBank(_ text: String, patterns: BankPatternSet) -> (sender: String?, receiver: String?) {
+        // For banks with positional name patterns (KBank): match[0]=sender, match[1]=receiver
+        if !patterns.positionalNamePatterns.isEmpty {
+            let result = extractPositionalNames(text, patterns: patterns.positionalNamePatterns)
+            if result.sender != nil { return result }
+        }
+
+        // For label-based banks (SCB, Dime): separate sender/receiver patterns
+        let sender = extractLabelName(text, patterns: patterns.senderName)
+        let receiver = extractLabelName(text, patterns: patterns.receiverName)
+        return (sender, receiver)
+    }
+
+    /// Extract names positionally: each pattern's match[0] = sender, match[1] = receiver.
+    private func extractPositionalNames(_ text: String, patterns: [NSRegularExpression]) -> (sender: String?, receiver: String?) {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        for regex in patterns {
+            let matches = regex.matches(in: text, options: [], range: range)
+            if matches.count >= 2 {
+                let sender = nsText.substring(with: matches[0].range(at: 1))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let receiver = nsText.substring(with: matches[1].range(at: 1))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !sender.isEmpty {
+                    return (sender, receiver.isEmpty ? nil : receiver)
+                }
+            } else if matches.count == 1, matches[0].numberOfRanges > 1 {
+                let sender = nsText.substring(with: matches[0].range(at: 1))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !sender.isEmpty { return (sender, nil) }
+            }
+        }
+        return (nil, nil)
+    }
+
+    /// Extract a name using label-based patterns (first group(1) match).
+    private func extractLabelName(_ text: String, patterns: [NSRegularExpression]) -> String? {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        for regex in patterns {
+            if let match = regex.firstMatch(in: text, options: [], range: range),
+               match.numberOfRanges > 1 {
+                let name = nsText.substring(with: match.range(at: 1))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty { return name }
+            }
+        }
+        return nil
+    }
+
+    /// Extract all account numbers from the first matching pattern.
+    private func extractAccountsForBank(_ text: String, patterns: [NSRegularExpression]) -> [String] {
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+
+        for regex in patterns {
+            let matches = regex.matches(in: text, options: [], range: range)
+            if !matches.isEmpty {
+                return matches.compactMap { match in
+                    guard match.numberOfRanges > 1 else { return nil }
+                    return nsText.substring(with: match.range(at: 1))
+                }
+            }
+        }
+        return []
     }
 }
