@@ -27,6 +27,22 @@ class AnalysisRoute extends PageRouteInfo<void> {
 }
 
 /// generated route for
+/// [CategoryManagementScreen]
+class CategoryManagementRoute extends PageRouteInfo<void> {
+  const CategoryManagementRoute({List<PageRouteInfo>? children})
+    : super(CategoryManagementRoute.name, initialChildren: children);
+
+  static const String name = 'CategoryManagementRoute';
+
+  static PageInfo page = PageInfo(
+    name,
+    builder: (data) {
+      return const CategoryManagementScreen();
+    },
+  );
+}
+
+/// generated route for
 /// [ChatScreen]
 class ChatRoute extends PageRouteInfo<ChatRouteArgs> {
   ChatRoute({

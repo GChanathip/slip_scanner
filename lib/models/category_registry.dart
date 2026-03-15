@@ -113,6 +113,13 @@ String getCategoryEmoji(String? slug) {
   return _builtInBySlug[slug]?.emoji ?? '📋';
 }
 
+/// Convert a color key (e.g. 'orange') to a Flutter Color using the palette.
+Color colorFromKey(String? key) {
+  final hex = kCategoryColorPalette[key ?? 'teal'] ?? '#14B8A6';
+  final value = int.parse(hex.substring(1), radix: 16);
+  return Color(0xFF000000 | value);
+}
+
 /// Validate a category slug — returns the slug if valid, otherwise 'other'.
 String validateCategorySlug(String? slug) {
   if (slug == null) return 'other';

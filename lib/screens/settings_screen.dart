@@ -6,6 +6,7 @@ import 'package:forui/forui.dart';
 import 'package:slip_scanner/providers/cactus_state.dart';
 import '../providers/cactus_provider.dart';
 import '../providers/extraction_provider.dart';
+import '../router/app_router.dart';
 import '../services/cactus_service.dart';
 
 @RoutePage()
@@ -122,6 +123,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const Text('Failed to load models')
                 else
                   ..._availableModels!.map((model) => _buildModelTile(model, cactusState)),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Categories Card
+          FCard(
+            title: const Text('Categories'),
+            subtitle: const Text('Manage custom expense categories.'),
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                FButton(
+                  variant: FButtonVariant.outline,
+                  onPress: () => context.router.push(const CategoryManagementRoute()),
+                  prefix: const Icon(FIcons.tag),
+                  child: const Text('Manage Categories'),
+                ),
               ],
             ),
           ),
