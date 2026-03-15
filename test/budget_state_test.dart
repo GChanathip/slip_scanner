@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:avers/providers/budget_state.dart';
+import 'package:avers/features/budget/providers/budget_state.dart';
 
 void main() {
   group('BudgetAlert', () {

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:avers/utils/slip_conversion.dart';
+import 'package:avers/core/utils/slip_conversion.dart';
 
 void main() {
   group('nonEmpty', () {

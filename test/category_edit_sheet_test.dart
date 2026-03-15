@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:avers/widgets/category_edit_sheet.dart';
+import 'package:avers/features/category/widgets/category_edit_sheet.dart';
 
 void main() {
   group('CategoryEditSheet Widget Tests', () {

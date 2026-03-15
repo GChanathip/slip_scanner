@@ -1,0 +1,659 @@
+import 'dart:async';
+import 'dart:math' as math;
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
+import 'package:avers/core/models/payment_slip.dart';
+import 'package:avers/core/services/extraction_notifier.dart';
+
+class DatabaseService {
+  static Database? _database;
+  static Completer<Database>? _initCompleter;
+
+  static Future<Database> get database async {
+    if (_database != null) return _database!;
+    if (_initCompleter != null) return _initCompleter!.future;
+    _initCompleter = Completer<Database>();
+    try {
+      final db = await _initDatabase();
+      _database = db;
+      _initCompleter!.complete(db);
+      return db;
+    } catch (e) {
+      _initCompleter = null;
+      rethrow;
+    }
+  }
+
+  static Future<Database> _initDatabase() async {
+    String path = join(await getDatabasesPath(), 'payment_slips.db');
+    return await openDatabase(
+      path,
+      version: 8,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+    );
+  }
+
+  static Future<void> _onCreate(Database db, int version) async {
+    await db.execute('''
+      CREATE TABLE payment_slips(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        imagePath TEXT NOT NULL,
+        assetId TEXT,
+        amount REAL NOT NULL,
+        date TEXT NOT NULL,
+        extractedText TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        recipientName TEXT,
+        notes TEXT,
+        category TEXT,
+        senderName TEXT,
+        referenceId TEXT,
+        senderAccount TEXT,
+        receiverAccount TEXT,
+        transactionTime TEXT,
+        llmProcessingStatus TEXT DEFAULT 'pending',
+        ragIndexed INTEGER DEFAULT 0,
+        updatedAt TEXT,
+        retryCount INTEGER DEFAULT 0,
+        isRecurring INTEGER DEFAULT 0,
+        recurringFrequency TEXT,
+        categorySource TEXT,
+        bankType TEXT,
+        transRef TEXT
+      )
+    ''');
+
+    // custom_categories table
+    await db.execute('''
+      CREATE TABLE custom_categories(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        icon TEXT NOT NULL DEFAULT 'utensils',
+        color TEXT NOT NULL DEFAULT 'orange',
+        createdAt TEXT NOT NULL
+      )
+    ''');
+
+    // category_rules table
+    await db.execute('''
+      CREATE TABLE category_rules(
+        recipientPattern TEXT PRIMARY KEY,
+        category TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'user',
+        createdAt TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_category_rules_category ON category_rules(category)
+    ''');
+
+    // Create index for assetId to prevent duplicates
+    await db.execute('''
+      CREATE INDEX idx_assetId ON payment_slips(assetId)
+    ''');
+
+    // Create index for LLM processing queue
+    await db.execute('''
+      CREATE INDEX idx_llm_status ON payment_slips(llmProcessingStatus)
+    ''');
+
+    // Create index for reference ID lookups
+    await db.execute('''
+      CREATE INDEX idx_referenceId ON payment_slips(referenceId)
+    ''');
+  }
+
+  static Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // Add assetId column to existing table
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN assetId TEXT');
+
+      // Create index for assetId
+      await db.execute('''
+        CREATE INDEX idx_assetId ON payment_slips(assetId)
+      ''');
+    }
+
+    if (oldVersion < 3) {
+      // Add LLM extraction fields
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN recipientName TEXT');
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN notes TEXT');
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN category TEXT');
+      await db.execute("ALTER TABLE payment_slips ADD COLUMN llmProcessingStatus TEXT DEFAULT 'pending'");
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN ragIndexed INTEGER DEFAULT 0');
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN updatedAt TEXT');
+
+      // Create index for LLM processing queue
+      await db.execute('''
+        CREATE INDEX idx_llm_status ON payment_slips(llmProcessingStatus)
+      ''');
+    }
+
+    if (oldVersion < 4) {
+      // Add multi-bank OCR extraction fields
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN senderName TEXT');
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN referenceId TEXT');
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN senderAccount TEXT');
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN receiverAccount TEXT');
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN transactionTime TEXT');
+
+      await db.execute('CREATE INDEX idx_referenceId ON payment_slips(referenceId)');
+    }
+
+    if (oldVersion < 5) {
+      // Add retry count for capping failed extraction retries
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN retryCount INTEGER DEFAULT 0');
+    }
+
+    if (oldVersion < 6) {
+      // Add recurring transaction fields
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN isRecurring INTEGER DEFAULT 0');
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN recurringFrequency TEXT');
+    }
+
+    if (oldVersion < 7) {
+      // Add categorySource to payment_slips
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN categorySource TEXT');
+
+      // Create custom_categories table
+      await db.execute('''
+        CREATE TABLE custom_categories(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+          icon TEXT NOT NULL DEFAULT 'utensils',
+          color TEXT NOT NULL DEFAULT 'orange',
+          createdAt TEXT NOT NULL
+        )
+      ''');
+
+      // Create category_rules table + index
+      await db.execute('''
+        CREATE TABLE category_rules(
+          recipientPattern TEXT PRIMARY KEY,
+          category TEXT NOT NULL,
+          source TEXT NOT NULL DEFAULT 'user',
+          createdAt TEXT NOT NULL
+        )
+      ''');
+
+      await db.execute('''
+        CREATE INDEX idx_category_rules_category ON category_rules(category)
+      ''');
+    }
+
+    if (oldVersion < 8) {
+      // Add bank detection fields
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN bankType TEXT');
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN transRef TEXT');
+    }
+  }
+
+  static Future<int> insertPaymentSlip(PaymentSlip slip) async {
+    final db = await database;
+    return await db.insert('payment_slips', slip.toMap());
+  }
+
+  static Future<void> insertPaymentSlipsBatch(List<PaymentSlip> slips) async {
+    if (slips.isEmpty) return;
+    
+    try {
+      final db = await database;
+      
+      // OPTIMIZATION: Get all existing assetIds in a single query
+      final existingAssetIds = <String>{};
+      final slipsWithAssetIds = slips.where((slip) => slip.assetId != null).toList();
+      
+      if (slipsWithAssetIds.isNotEmpty) {
+        final assetIdsToCheck = slipsWithAssetIds.map((slip) => slip.assetId!).toSet().toList();
+        final placeholders = List.filled(assetIdsToCheck.length, '?').join(',');
+        
+        final existingResult = await db.query(
+          'payment_slips',
+          columns: ['assetId'],
+          where: 'assetId IN ($placeholders)',
+          whereArgs: assetIdsToCheck,
+        );
+        
+        existingAssetIds.addAll(existingResult.map((row) => row['assetId'] as String));
+        print('🗃️ DEBUG: Found ${existingAssetIds.length} existing assetIds out of ${assetIdsToCheck.length} to check');
+      }
+      
+      // Use transaction for atomicity
+      List<int> insertedIds = [];
+      await db.transaction((txn) async {
+        final batch = txn.batch();
+        int insertCount = 0;
+        int skipCount = 0;
+
+        for (final slip in slips) {
+          bool shouldInsert = true;
+
+          if (slip.assetId != null && existingAssetIds.contains(slip.assetId)) {
+            shouldInsert = false;
+            skipCount++;
+          }
+
+          if (shouldInsert) {
+            batch.insert('payment_slips', slip.toMap());
+            insertCount++;
+          }
+        }
+
+        // Get inserted IDs for notification
+        final results = await batch.commit();
+        insertedIds = results.whereType<int>().toList();
+        print('🗃️ DEBUG: Batch insert completed - inserted: $insertCount, skipped: $skipCount');
+      });
+
+      // Notify extraction queue that new slips are available (event-driven)
+      if (insertedIds.isNotEmpty) {
+        ExtractionNotifier.instance.notifyNewSlips(insertedIds);
+      }
+      
+    } catch (e) {
+      print('❌ ERROR: Database batch insert failed: $e');
+      rethrow; // Re-throw to let caller handle the error
+    }
+  }
+
+  static Future<List<String>> getProcessedAssetIds() async {
+    final db = await database;
+    final result = await db.query(
+      'payment_slips',
+      columns: ['assetId'],
+      where: 'assetId IS NOT NULL',
+    );
+    
+    return result.map((row) => row['assetId'] as String).toList();
+  }
+
+  static Future<List<PaymentSlip>> getPaymentSlips() async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        'payment_slips',
+        orderBy: 'date DESC',
+      );
+      return maps.map(PaymentSlip.fromMap).toList();
+    } catch (e) {
+      print('❌ ERROR: Failed to get payment slips: $e');
+      return []; // Return empty list on error
+    }
+  }
+
+  static Future<List<PaymentSlip>> getPaymentSlipsByMonth(DateTime month) async {
+    final db = await database;
+    final startOfMonth = DateTime(month.year, month.month, 1);
+    final endOfMonth = DateTime(month.year, month.month + 1, 0, 23, 59, 59);
+    
+    final List<Map<String, dynamic>> maps = await db.query(
+      'payment_slips',
+      where: 'date >= ? AND date <= ?',
+      whereArgs: [startOfMonth.toIso8601String(), endOfMonth.toIso8601String()],
+      orderBy: 'date DESC',
+    );
+    
+    return maps.map(PaymentSlip.fromMap).toList();
+  }
+
+  static Future<Map<String, double>> getMonthlyTotals() async {
+    try {
+      final db = await database;
+      final List<Map<String, dynamic>> result = await db.rawQuery('''
+        SELECT 
+          strftime('%Y-%m', date) as month,
+          SUM(amount) as total
+        FROM payment_slips
+        GROUP BY strftime('%Y-%m', date)
+        ORDER BY month DESC
+      ''');
+      
+      Map<String, double> monthlyTotals = {};
+      for (var row in result) {
+        monthlyTotals[row['month']] = row['total'];
+      }
+      return monthlyTotals;
+    } catch (e) {
+      print('❌ ERROR: Failed to get monthly totals: $e');
+      return {}; // Return empty map on error
+    }
+  }
+
+  static Future<void> deletePaymentSlip(int id) async {
+    final db = await database;
+    await db.delete(
+      'payment_slips',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  // ============ LLM Processing Queue Methods ============
+
+  /// Get slips with a specific LLM processing status
+  static Future<List<PaymentSlip>> getSlipsWithStatus(String status, {int limit = 10}) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'payment_slips',
+      where: 'llmProcessingStatus = ?',
+      whereArgs: [status],
+      orderBy: 'createdAt ASC',
+      limit: limit,
+    );
+    return maps.map(PaymentSlip.fromMap).toList();
+  }
+
+  /// Count slips with a specific status
+  static Future<int> countSlipsWithStatus(String status) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM payment_slips WHERE llmProcessingStatus = ?',
+      [status],
+    );
+    return result.first['count'] as int;
+  }
+
+  /// Update LLM processing status
+  static Future<void> updateLLMStatus(int id, String status) async {
+    final db = await database;
+    await db.update(
+      'payment_slips',
+      {
+        'llmProcessingStatus': status,
+        'updatedAt': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Update extracted data from LLM
+  static Future<void> updateExtractedData(
+    int id, {
+    String? recipientName,
+    String? notes,
+    String? category,
+    String? categorySource,
+  }) async {
+    final db = await database;
+    final updates = <String, dynamic>{
+      'updatedAt': DateTime.now().toIso8601String(),
+    };
+    if (recipientName != null) updates['recipientName'] = recipientName;
+    if (notes != null) updates['notes'] = notes;
+    if (category != null) updates['category'] = category;
+    if (categorySource != null) updates['categorySource'] = categorySource;
+
+    await db.update(
+      'payment_slips',
+      updates,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Generic field update for edit mode.
+  /// Accepts any subset of editable fields: recipientName, notes, category,
+  /// isRecurring, recurringFrequency, amount.
+  /// Always resets ragIndexed to 0 so the updated slip gets re-indexed.
+  static Future<void> updateSlipFields(int id, Map<String, dynamic> fields) async {
+    final db = await database;
+    final updates = <String, dynamic>{
+      'updatedAt': DateTime.now().toIso8601String(),
+      'ragIndexed': 0,
+    };
+    const allowedFields = {
+      'recipientName',
+      'notes',
+      'category',
+      'categorySource',
+      'isRecurring',
+      'recurringFrequency',
+      'amount',
+    };
+    for (final entry in fields.entries) {
+      if (allowedFields.contains(entry.key)) {
+        final value = entry.value;
+        // Normalise bool isRecurring → int for SQLite
+        updates[entry.key] = (entry.key == 'isRecurring' && value is bool)
+            ? (value ? 1 : 0)
+            : value;
+      }
+    }
+    await db.update(
+      'payment_slips',
+      updates,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Update RAG indexed status
+  static Future<void> updateRAGIndexed(int id, bool indexed) async {
+    final db = await database;
+    await db.update(
+      'payment_slips',
+      {
+        'ragIndexed': indexed ? 1 : 0,
+        'updatedAt': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Get payment slips within a date range
+  static Future<List<PaymentSlip>> getPaymentSlipsInRange(DateTime start, DateTime end) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'payment_slips',
+      where: 'date >= ? AND date <= ?',
+      whereArgs: [start.toIso8601String(), end.toIso8601String()],
+      orderBy: 'date DESC',
+    );
+    return maps.map(PaymentSlip.fromMap).toList();
+  }
+
+  /// Reset failed slips back to pending for retry, only if retryCount < 3
+  static Future<void> resetFailedToStatus(String newStatus) async {
+    final db = await database;
+    await db.update(
+      'payment_slips',
+      {
+        'llmProcessingStatus': newStatus,
+        'updatedAt': DateTime.now().toIso8601String(),
+      },
+      where: 'llmProcessingStatus = ? AND retryCount < 3',
+      whereArgs: ['failed'],
+    );
+  }
+
+  /// Increment retryCount for a slip (called when extraction fails)
+  static Future<void> incrementRetryCount(int id) async {
+    final db = await database;
+    await db.rawUpdate(
+      'UPDATE payment_slips SET retryCount = retryCount + 1, updatedAt = ? WHERE id = ?',
+      [DateTime.now().toIso8601String(), id],
+    );
+  }
+
+  // ============ Analytics Query Methods ============
+
+  /// Get daily spending totals within a date range
+  static Future<Map<String, double>> getDailyTotals(DateTime start, DateTime end) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT
+        strftime('%Y-%m-%d', date) as day,
+        SUM(amount) as total
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+      GROUP BY strftime('%Y-%m-%d', date)
+      ORDER BY day ASC
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    return {for (var row in result) row['day'] as String: (row['total'] as num).toDouble()};
+  }
+
+  /// Get weekly spending totals within a date range (ISO week)
+  static Future<Map<String, double>> getWeeklyTotals(DateTime start, DateTime end) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT
+        strftime('%Y-W%W', date) as week,
+        SUM(amount) as total,
+        COUNT(*) as count
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+      GROUP BY strftime('%Y-W%W', date)
+      ORDER BY week ASC
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    return {for (var row in result) row['week'] as String: (row['total'] as num).toDouble()};
+  }
+
+  /// Get yearly spending totals
+  static Future<Map<String, double>> getYearlyTotals() async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT
+        strftime('%Y', date) as year,
+        SUM(amount) as total
+      FROM payment_slips
+      GROUP BY strftime('%Y', date)
+      ORDER BY year ASC
+    ''');
+
+    return {for (var row in result) row['year'] as String: (row['total'] as num).toDouble()};
+  }
+
+  /// Get top recipients by total spending within a date range
+  static Future<Map<String, double>> getTopRecipients(DateTime start, DateTime end, {int limit = 10}) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT
+        COALESCE(recipientName, 'Unknown') as recipient,
+        SUM(amount) as total,
+        COUNT(*) as count
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+        AND recipientName IS NOT NULL AND recipientName != ''
+      GROUP BY recipientName
+      ORDER BY total DESC
+      LIMIT ?
+    ''', [start.toIso8601String(), end.toIso8601String(), limit]);
+
+    return {for (var row in result) row['recipient'] as String: (row['total'] as num).toDouble()};
+  }
+
+  /// Get category spending trend by month within a date range
+  static Future<Map<String, Map<String, double>>> getCategoryTrend(DateTime start, DateTime end) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT
+        strftime('%Y-%m', date) as month,
+        COALESCE(category, 'uncategorized') as cat,
+        SUM(amount) as total
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+      GROUP BY strftime('%Y-%m', date), COALESCE(category, 'uncategorized')
+      ORDER BY month ASC, total DESC
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    final trend = <String, Map<String, double>>{};
+    for (final row in result) {
+      final month = row['month'] as String;
+      final cat = row['cat'] as String;
+      final total = (row['total'] as num).toDouble();
+      trend.putIfAbsent(month, () => {})[cat] = total;
+    }
+    return trend;
+  }
+
+  /// Get spending totals grouped by day of week (0=Sunday, 6=Saturday)
+  static Future<Map<int, double>> getDayOfWeekTotals(DateTime start, DateTime end) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT
+        CAST(strftime('%w', date) AS INTEGER) as dow,
+        SUM(amount) as total,
+        COUNT(*) as count
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+      GROUP BY strftime('%w', date)
+      ORDER BY dow ASC
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    return {for (var row in result) row['dow'] as int: (row['total'] as num).toDouble()};
+  }
+
+  /// Get spending totals for a specific period (for period-over-period comparison)
+  static Future<double> getTotalForPeriod(DateTime start, DateTime end) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT COALESCE(SUM(amount), 0) as total
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    return (result.first['total'] as num).toDouble();
+  }
+
+  /// Get average spending per category over a historical period (for anomaly detection)
+  static Future<Map<String, double>> getCategoryAverages(DateTime start, DateTime end) async {
+    final db = await database;
+    // Calculate number of months in range for monthly average
+    final result = await db.rawQuery('''
+      SELECT
+        COALESCE(category, 'uncategorized') as cat,
+        SUM(amount) as total,
+        COUNT(DISTINCT strftime('%Y-%m', date)) as months
+      FROM payment_slips
+      WHERE date >= ? AND date <= ?
+      GROUP BY COALESCE(category, 'uncategorized')
+    ''', [start.toIso8601String(), end.toIso8601String()]);
+
+    return {
+      for (var row in result)
+        row['cat'] as String: (row['total'] as num).toDouble() / math.max(1, row['months'] as int)
+    };
+  }
+
+  /// Get 3-month rolling average monthly spend per category.
+  ///
+  /// [months] controls how many past months to include (default 3).
+  /// Returns category -> average monthly spend, excluding null/empty categories.
+  static Future<Map<String, double>> getCategoryMonthlyAverages({int months = 3}) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT category, AVG(monthly_total) as avg
+      FROM (
+        SELECT category, strftime('%Y-%m', date) as month, SUM(amount) as monthly_total
+        FROM payment_slips
+        WHERE date >= date('now', '-$months months') AND category IS NOT NULL AND category != ''
+        GROUP BY category, strftime('%Y-%m', date)
+      )
+      GROUP BY category
+    ''');
+
+    return {
+      for (final row in result)
+        row['category'] as String: (row['avg'] as num).toDouble()
+    };
+  }
+
+  /// Get slips that haven't been indexed in RAG
+  static Future<List<PaymentSlip>> getUnindexedSlips({int limit = 10}) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'payment_slips',
+      where: 'ragIndexed = 0 AND llmProcessingStatus = ?',
+      whereArgs: ['completed'],
+      orderBy: 'createdAt ASC',
+      limit: limit,
+    );
+    return maps.map(PaymentSlip.fromMap).toList();
+  }
+}
