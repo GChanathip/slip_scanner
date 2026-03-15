@@ -94,8 +94,10 @@ class _ServerDashboardScreenState extends ConsumerState<ServerDashboardScreen> {
       final port = _validatePort();
       if (port == null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Invalid port (must be 1-65535)')),
+          showFToast(
+            context: context,
+            title: const Text('Error'),
+            description: const Text('Invalid port (must be 1-65535)'),
           );
         }
         return;
@@ -112,10 +114,14 @@ class _ServerDashboardScreenState extends ConsumerState<ServerDashboardScreen> {
         await _ensureModelAndExtraction();
         await _serverService.start();
       }
-    } catch (e) {
+    } catch (e,s) {
+      debugPrint('Error: $e');
+      debugPrintStack(stackTrace: s);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+        showFToast(
+          context: context,
+          title: const Text('Error'),
+          description: Text('$e'),
         );
       }
     } finally {
