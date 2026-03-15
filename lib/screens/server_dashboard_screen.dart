@@ -16,30 +16,29 @@ class ServerDashboardScreen extends StatefulWidget {
 }
 
 class _ServerDashboardScreenState extends State<ServerDashboardScreen> {
-  final _serverService = ServerService();
+  final _serverService = ServerService.instance;
   final _tokenController = TextEditingController();
   final _secretController = TextEditingController();
   final _portController = TextEditingController(text: '8080');
 
   bool _isLoading = false;
-  Timer? _refreshTimer;
+  StreamSubscription<bool>? _statusSubscription;
 
   @override
   void initState() {
     super.initState();
     _loadConfig();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    _statusSubscription = _serverService.statusStream.listen((_) {
       if (mounted) setState(() {});
     });
   }
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
+    _statusSubscription?.cancel();
     _tokenController.dispose();
     _secretController.dispose();
     _portController.dispose();
-    _serverService.stop();
     super.dispose();
   }
 
@@ -63,7 +62,25 @@ class _ServerDashboardScreenState extends State<ServerDashboardScreen> {
     await ConfigService.setServerPort(port);
   }
 
+  int? _validatePort() {
+    final port = int.tryParse(_portController.text.trim());
+    if (port == null || port < 1 || port > 65535) return null;
+    return port;
+  }
+
   Future<void> _toggleServer() async {
+    if (!_serverService.isRunning) {
+      final port = _validatePort();
+      if (port == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Invalid port (must be 1-65535)')),
+          );
+        }
+        return;
+      }
+    }
+
     setState(() => _isLoading = true);
     try {
       if (_serverService.isRunning) {

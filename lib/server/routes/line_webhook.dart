@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -42,8 +43,7 @@ class LineWebhookHandler {
     // 4. Return 200 OK immediately, process events async
     final events = payload['events'] as List<dynamic>? ?? [];
     for (final event in events) {
-      // Fire-and-forget: process each event asynchronously
-      Future.microtask(() => _processEvent(event));
+      unawaited(_processEvent(event));
     }
 
     return Response.ok('OK');
@@ -74,8 +74,9 @@ class LineWebhookHandler {
           );
         }
       }
-    } catch (e) {
-      debugPrint('Error processing webhook event: $e');
+    } catch (e, st) {
+      debugPrint('Error processing webhook event: $e\n$st');
+      _addEvent(WebhookEvent(type: 'error', detail: 'Unhandled: $e'));
     }
   }
 
@@ -86,13 +87,6 @@ class LineWebhookHandler {
   }) async {
     _addEvent(WebhookEvent(type: 'image', detail: 'Processing image...'));
 
-    // Send immediate acknowledgment
-    if (replyToken != null) {
-      await lineService!.replyMessage(replyToken, [
-        LineService.textMessage('Processing your slip...'),
-      ]);
-    }
-
     try {
       // Download image from LINE CDN
       final imageData = await lineService!.getMessageContent(messageId);
@@ -100,8 +94,12 @@ class LineWebhookHandler {
       // Process through OCR pipeline
       final result = await SlipProcessorService.processLineImage(imageData);
 
-      // Send result via push message (replyToken already used)
-      if (userId != null) {
+      // Reply with the actual result (replyToken is still valid for ~30s)
+      if (replyToken != null) {
+        await lineService!.replyMessage(replyToken, [
+          LineService.textMessage(result),
+        ]);
+      } else if (userId != null) {
         await lineService!.pushMessage(userId, [
           LineService.textMessage(result),
         ]);
@@ -110,7 +108,12 @@ class LineWebhookHandler {
       _addEvent(WebhookEvent(type: 'image', detail: 'Processed: ${result.split('\n').first}'));
     } catch (e) {
       debugPrint('Error processing image: $e');
-      if (userId != null) {
+      // replyToken may still be valid if image download/OCR failed quickly
+      if (replyToken != null) {
+        await lineService!.replyMessage(replyToken, [
+          LineService.textMessage('Sorry, I could not process this image. Please try again.'),
+        ]);
+      } else if (userId != null) {
         await lineService!.pushMessage(userId, [
           LineService.textMessage('Sorry, I could not process this image. Please try again.'),
         ]);
@@ -130,7 +133,6 @@ class LineWebhookHandler {
       // Process query through LLM
       final response = await ChatQueryService.processQuery(text);
 
-      // Try reply first (faster), fall back to push if token expired
       if (replyToken != null) {
         await lineService!.replyMessage(replyToken, [
           LineService.textMessage(response),
@@ -147,7 +149,11 @@ class LineWebhookHandler {
       ));
     } catch (e) {
       debugPrint('Error processing text query: $e');
-      if (userId != null) {
+      if (replyToken != null) {
+        await lineService!.replyMessage(replyToken, [
+          LineService.textMessage('Sorry, I encountered an error. Please try again.'),
+        ]);
+      } else if (userId != null) {
         await lineService!.pushMessage(userId, [
           LineService.textMessage('Sorry, I encountered an error. Please try again.'),
         ]);

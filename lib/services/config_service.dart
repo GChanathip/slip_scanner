@@ -1,30 +1,29 @@
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Manages LINE bot credentials and server configuration.
-/// Stored via SharedPreferences (macOS: ~/Library/Preferences plist).
+/// Credentials stored in Keychain (macOS) via flutter_secure_storage.
+/// Non-sensitive settings stored via SharedPreferences.
 class ConfigService {
+  static const _storage = FlutterSecureStorage();
   static const _keyLineChannelToken = 'line_channel_access_token';
   static const _keyLineChannelSecret = 'line_channel_secret';
   static const _keyServerPort = 'server_port';
 
   static Future<String?> getLineChannelToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyLineChannelToken);
+    return _storage.read(key: _keyLineChannelToken);
   }
 
   static Future<void> setLineChannelToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyLineChannelToken, token);
+    await _storage.write(key: _keyLineChannelToken, value: token);
   }
 
   static Future<String?> getLineChannelSecret() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyLineChannelSecret);
+    return _storage.read(key: _keyLineChannelSecret);
   }
 
   static Future<void> setLineChannelSecret(String secret) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyLineChannelSecret, secret);
+    await _storage.write(key: _keyLineChannelSecret, value: secret);
   }
 
   static Future<int> getServerPort() async {

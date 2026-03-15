@@ -26,11 +26,23 @@ class LineService {
       };
 
   /// Verify X-Line-Signature header (HMAC-SHA256 with channel secret).
+  /// Uses constant-time comparison to prevent timing attacks.
   bool verifySignature(String body, String signature) {
     final hmacSha256 = Hmac(sha256, utf8.encode(channelSecret));
     final digest = hmacSha256.convert(utf8.encode(body));
-    final expected = base64.encode(digest.bytes);
-    return expected == signature;
+    final expected = base64.decode(base64.encode(digest.bytes));
+    final List<int> actual;
+    try {
+      actual = base64.decode(signature);
+    } catch (_) {
+      return false;
+    }
+    if (expected.length != actual.length) return false;
+    var result = 0;
+    for (var i = 0; i < expected.length; i++) {
+      result |= expected[i] ^ actual[i];
+    }
+    return result == 0;
   }
 
   /// Download image content for a message.

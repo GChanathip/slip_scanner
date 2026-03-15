@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Important
 
-This project focuses on **iOS only** — ignore Android implementation.
+This project targets **iOS and macOS only** — ignore Android implementation.
 
 ## Project Overview
 
-Flutter iOS app that scans payment slips from device photos using Apple Vision Framework OCR. Specializes in Thai banking slips (SCB, KBank Make/K Plus, Dime) with Thai language text recognition, Buddhist calendar conversion, and on-device LLM extraction via CactusLM.
+Flutter app (iOS + macOS) that scans payment slips using Apple Vision Framework OCR. Specializes in Thai banking slips (SCB, KBank Make/K Plus, Dime) with Thai language text recognition, Buddhist calendar conversion, and on-device LLM extraction via CactusLM. The macOS target embeds a shelf HTTP server for LINE bot integration — users send slip images via LINE chat and receive extracted payment data.
 
 ## Development Commands
 
@@ -65,7 +65,7 @@ Type-safe routing with `@RoutePage` annotations. Routes defined in `lib/router/a
 
 ### Platform Channels
 
-- `com.example.slip_scanner/vision` — OCR operations (scanAllPhotos, cancelScanning, scanPaymentSlip, deleteSlipImage, loadImageFromAsset)
+- `com.example.slip_scanner/vision` — OCR operations (scanAllPhotos, cancelScanning, scanPaymentSlip, deleteSlipImage, loadImageFromAsset, processImageData)
 - `com.example.slip_scanner/progress` — Real-time callbacks (onProgress, onPartialResults) via `DispatchQueue.main.async`
 
 ### On-Device AI Pipeline (CactusLM + RAG)
@@ -79,6 +79,17 @@ Type-safe routing with `@RoutePage` annotations. Routes defined in `lib/router/a
 **RAGQueueService** (singleton): Fire-and-forget indexing — doesn't block extraction if RAG fails. Indexes rich documents (amount, date, recipient, notes, category, original text).
 
 **ChatProvider**: Builds system prompt with expense stats + RAG context (top 5 relevant records), streams LLM completion. UI updates are batched every 100ms (not per-token) via `StringBuffer`.
+
+### macOS Native Implementation (LINE Bot Server)
+
+Split into three files under `macos/Runner/` (ported from iOS, using NSImage/CGImage instead of UIImage):
+
+- **`AppDelegate.swift`** — Platform channel setup. Handles `processImageData` (raw bytes from LINE) and `scanPaymentSlip` (file path). Dispatches to `DispatchQueue.global()`.
+- **`RegexPatterns.swift`** — Port of iOS regex patterns (shared logic, no UIKit dependency).
+- **`OCRService.swift`** — Port of iOS OCR pipeline using Vision Framework with `CGImage`.
+- **`SlipProcessor.swift`** — Bridges platform channel to OCR. Generates `line_<UUID>` asset IDs. No PHPhotoLibrary dependency.
+
+**Note**: macOS `RegexPatterns.swift` and `OCRService.swift` are near-copies of the iOS versions. Changes to regex/OCR logic must be applied to both.
 
 ### iOS Native Implementation
 
@@ -158,4 +169,5 @@ Uses `flutter_lints` with `riverpod_lint` plugin enabled (see `analysis_options.
 
 - **Flutter SDK**: 3.38.x+ (Dart SDK ^3.10.4)
 - **iOS Deployment Target**: 15.6+
-- **Xcode**: Latest for iOS development
+- **macOS Deployment Target**: 13.0+
+- **Xcode**: Latest for iOS/macOS development

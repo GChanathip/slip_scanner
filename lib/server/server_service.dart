@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -10,8 +11,11 @@ import '../services/line_service.dart';
 import 'routes/line_webhook.dart';
 
 /// Manages the embedded shelf HTTP server lifecycle.
-/// Starts when the macOS app launches, stops on exit.
+/// Singleton — the server outlives any individual screen.
 class ServerService {
+  ServerService._();
+  static final instance = ServerService._();
+
   HttpServer? _server;
   LineService? _lineService;
   int _port = 8080;
@@ -20,6 +24,10 @@ class ServerService {
   bool get isRunning => _isRunning;
   int get port => _port;
   LineService? get lineService => _lineService;
+
+  /// Notifies listeners when the server status changes.
+  final _statusController = StreamController<bool>.broadcast();
+  Stream<bool> get statusStream => _statusController.stream;
 
   /// Start the shelf server.
   Future<void> start({int? port}) async {
@@ -49,6 +57,7 @@ class ServerService {
 
     _server = await shelf_io.serve(handler, InternetAddress.anyIPv4, _port);
     _isRunning = true;
+    _statusController.add(true);
     debugPrint('Server started on port $_port');
   }
 
@@ -59,6 +68,7 @@ class ServerService {
     _lineService = null;
     _server = null;
     _isRunning = false;
+    _statusController.add(false);
     debugPrint('Server stopped');
   }
 

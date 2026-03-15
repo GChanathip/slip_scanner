@@ -67,6 +67,7 @@ dependencies:
   shelf_router: ^1.1.0
   crypto: ^3.0.0
   http: ^1.2.0
+  flutter_secure_storage: ^9.2.0
 
 dev_dependencies:
   flutter_test:
