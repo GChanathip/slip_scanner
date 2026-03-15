@@ -14,9 +14,6 @@ void main() {
         ),
       );
 
-      // Wait for async providers to load
-      await tester.pumpAndSettle();
-
       // Verify built-in categories displayed
       expect(find.text('Food'), findsOneWidget);
       expect(find.text('Transport'), findsOneWidget);
