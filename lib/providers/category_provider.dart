@@ -1,5 +1,4 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:sqflite/sqflite.dart';
 import '../models/category_registry.dart';
 import '../models/custom_category.dart';
 import '../services/category_service.dart';
