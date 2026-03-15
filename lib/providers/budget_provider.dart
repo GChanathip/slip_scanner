@@ -120,6 +120,7 @@ class Budget extends _$Budget {
     if (percentage >= 100) return BudgetAlertLevel.exceeded;
     if (percentage >= 90) return BudgetAlertLevel.danger;
     if (percentage >= 75) return BudgetAlertLevel.warning;
+    if (percentage >= 50) return BudgetAlertLevel.info;
     return BudgetAlertLevel.normal;
   }
 }

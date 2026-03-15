@@ -13,7 +13,7 @@ abstract class BudgetAlert with _$BudgetAlert {
   }) = _BudgetAlert;
 }
 
-enum BudgetAlertLevel { normal, warning, danger, exceeded }
+enum BudgetAlertLevel { normal, info, warning, danger, exceeded }
 
 @freezed
 abstract class BudgetState with _$BudgetState {
