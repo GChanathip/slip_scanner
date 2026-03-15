@@ -25,6 +25,10 @@ class PaymentSlip {
   final DateTime? updatedAt;
   final int retryCount;
 
+  // Recurring transaction fields
+  final bool isRecurring;
+  final String? recurringFrequency; // 'weekly', 'monthly', 'custom', or null
+
   PaymentSlip({
     this.id,
     required this.imagePath,
@@ -45,6 +49,8 @@ class PaymentSlip {
     this.ragIndexed = false,
     this.updatedAt,
     this.retryCount = 0,
+    this.isRecurring = false,
+    this.recurringFrequency,
   });
 
   Map<String, dynamic> toMap() {
@@ -68,6 +74,8 @@ class PaymentSlip {
       'ragIndexed': ragIndexed ? 1 : 0,
       'updatedAt': updatedAt?.toIso8601String(),
       'retryCount': retryCount,
+      'isRecurring': isRecurring ? 1 : 0,
+      'recurringFrequency': recurringFrequency,
     };
   }
 
@@ -92,6 +100,8 @@ class PaymentSlip {
       ragIndexed: (map['ragIndexed'] ?? 0) == 1,
       updatedAt: map['updatedAt'] != null ? DateTime.parse(map['updatedAt']) : null,
       retryCount: map['retryCount'] as int? ?? 0,
+      isRecurring: (map['isRecurring'] ?? 0) == 1,
+      recurringFrequency: map['recurringFrequency'],
     );
   }
 
@@ -116,6 +126,8 @@ class PaymentSlip {
     bool? ragIndexed,
     DateTime? updatedAt,
     int? retryCount,
+    bool? isRecurring,
+    String? recurringFrequency,
   }) {
     return PaymentSlip(
       id: id ?? this.id,
@@ -137,6 +149,8 @@ class PaymentSlip {
       ragIndexed: ragIndexed ?? this.ragIndexed,
       updatedAt: updatedAt ?? this.updatedAt,
       retryCount: retryCount ?? this.retryCount,
+      isRecurring: isRecurring ?? this.isRecurring,
+      recurringFrequency: recurringFrequency ?? this.recurringFrequency,
     );
   }
 }

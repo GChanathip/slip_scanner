@@ -28,7 +28,7 @@ class DatabaseService {
     String path = join(await getDatabasesPath(), 'payment_slips.db');
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -55,7 +55,9 @@ class DatabaseService {
         llmProcessingStatus TEXT DEFAULT 'pending',
         ragIndexed INTEGER DEFAULT 0,
         updatedAt TEXT,
-        retryCount INTEGER DEFAULT 0
+        retryCount INTEGER DEFAULT 0,
+        isRecurring INTEGER DEFAULT 0,
+        recurringFrequency TEXT
       )
     ''');
 
@@ -115,6 +117,12 @@ class DatabaseService {
     if (oldVersion < 5) {
       // Add retry count for capping failed extraction retries
       await db.execute('ALTER TABLE payment_slips ADD COLUMN retryCount INTEGER DEFAULT 0');
+    }
+
+    if (oldVersion < 6) {
+      // Add recurring transaction fields
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN isRecurring INTEGER DEFAULT 0');
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN recurringFrequency TEXT');
     }
   }
 
@@ -312,6 +320,41 @@ class DatabaseService {
     if (notes != null) updates['notes'] = notes;
     if (category != null) updates['category'] = category;
 
+    await db.update(
+      'payment_slips',
+      updates,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Generic field update for edit mode.
+  /// Accepts any subset of editable fields: recipientName, notes, category,
+  /// isRecurring, recurringFrequency, amount.
+  /// Always resets ragIndexed to 0 so the updated slip gets re-indexed.
+  static Future<void> updateSlipFields(int id, Map<String, dynamic> fields) async {
+    final db = await database;
+    final updates = <String, dynamic>{
+      'updatedAt': DateTime.now().toIso8601String(),
+      'ragIndexed': 0,
+    };
+    const allowedFields = {
+      'recipientName',
+      'notes',
+      'category',
+      'isRecurring',
+      'recurringFrequency',
+      'amount',
+    };
+    for (final entry in fields.entries) {
+      if (allowedFields.contains(entry.key)) {
+        final value = entry.value;
+        // Normalise bool isRecurring → int for SQLite
+        updates[entry.key] = (entry.key == 'isRecurring' && value is bool)
+            ? (value ? 1 : 0)
+            : value;
+      }
+    }
     await db.update(
       'payment_slips',
       updates,
