@@ -170,7 +170,7 @@ class _ServerDashboardScreenState extends ConsumerState<ServerDashboardScreen> {
 
     return FScaffold(
       header: FHeader(
-        title: const Text('Slip Scanner Server'),
+        title: const Text('Avers Server'),
       ),
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),

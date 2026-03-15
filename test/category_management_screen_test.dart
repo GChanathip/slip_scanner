@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:slip_scanner/screens/category_management_screen.dart';
+import 'package:avers/screens/category_management_screen.dart';
 
 void main() {
   group('CategoryManagementScreen Widget Tests', () {

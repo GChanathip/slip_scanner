@@ -87,8 +87,8 @@ Type-safe routing with `@RoutePage` annotations. Routes defined in `lib/router/a
 
 ### Platform Channels
 
-- `com.example.slip_scanner/vision` — OCR operations (scanAllPhotos, cancelScanning, scanPaymentSlip, deleteSlipImage, loadImageFromAsset, processImageData)
-- `com.example.slip_scanner/progress` — Real-time callbacks (onProgress, onPartialResults) via `DispatchQueue.main.async`
+- `com.avers.app/vision` — OCR operations (scanAllPhotos, cancelScanning, scanPaymentSlip, deleteSlipImage, loadImageFromAsset, processImageData)
+- `com.avers.app/progress` — Real-time callbacks (onProgress, onPartialResults) via `DispatchQueue.main.async`
 
 ### On-Device AI Pipeline (CactusLM + RAG)
 

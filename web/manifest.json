@@ -1,6 +1,6 @@
 {
-    "name": "slip_scanner",
-    "short_name": "slip_scanner",
+    "name": "avers",
+    "short_name": "avers",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

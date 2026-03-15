@@ -3,7 +3,7 @@ import 'package:cactus/cactus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
-import 'package:slip_scanner/providers/cactus_state.dart';
+import 'package:avers/providers/cactus_state.dart';
 import '../providers/cactus_provider.dart';
 import '../providers/extraction_provider.dart';
 import '../router/app_router.dart';

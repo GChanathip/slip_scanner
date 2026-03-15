@@ -13,11 +13,11 @@ import UIKit
         let controller = window?.rootViewController as! FlutterViewController
 
         let progressChannel = FlutterMethodChannel(
-            name: "com.example.slip_scanner/progress",
+            name: "com.avers.app/progress",
             binaryMessenger: controller.binaryMessenger
         )
         let visionChannel = FlutterMethodChannel(
-            name: "com.example.slip_scanner/vision",
+            name: "com.avers.app/vision",
             binaryMessenger: controller.binaryMessenger
         )
 

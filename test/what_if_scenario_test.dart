@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:slip_scanner/models/what_if_scenario.dart';
+import 'package:avers/models/what_if_scenario.dart';
 
 void main() {
   group('WhatIfScenario', () {

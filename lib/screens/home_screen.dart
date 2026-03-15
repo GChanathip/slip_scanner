@@ -263,7 +263,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final budgetState = ref.watch(budgetProvider);
 
     return FScaffold(
-      header: const FHeader(title: Text('Payment Slip Scanner')),
+      header: const FHeader(title: Text('Avers')),
       child: Stack(
         children: [
           _isLoading
@@ -417,7 +417,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       icon: Icon(FIcons.lightbulb, color: theme.colors.primary),
                       title: const Text('Getting Started'),
                       subtitle: const Text(
-                        'Welcome to Payment Slip Scanner! This app automatically finds and tracks payment slips in your photo library.\n\n'
+                        'Welcome to Avers! This app automatically finds and tracks payment slips in your photo library.\n\n'
                         '• Tap "Scan All Photos" to start\n'
                         '• The app will find payment amounts and dates\n'
                         '• View your spending organized by month\n'

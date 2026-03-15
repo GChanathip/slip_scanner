@@ -11,7 +11,7 @@ class AppDelegate: FlutterAppDelegate {
         }
 
         let visionChannel = FlutterMethodChannel(
-            name: "com.example.slip_scanner/vision",
+            name: "com.avers.app/vision",
             binaryMessenger: controller.engine.binaryMessenger
         )
 

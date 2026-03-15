@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 
 class PlatformService {
-  static const MethodChannel _channel = MethodChannel('com.example.slip_scanner/vision');
-  static const MethodChannel _progressChannel = MethodChannel('com.example.slip_scanner/progress');
+  static const MethodChannel _channel = MethodChannel('com.avers.app/vision');
+  static const MethodChannel _progressChannel = MethodChannel('com.avers.app/progress');
 
   static StreamController<Map<String, dynamic>>? _progressController;
   static StreamController<Map<String, dynamic>>? _partialResultsController;
