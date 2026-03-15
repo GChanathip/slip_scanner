@@ -18,6 +18,7 @@ class PaymentSlip {
   final String? recipientName;
   final String? notes;
   final String? category;
+  final String? categorySource; // 'ai' | 'rule' | null
 
   // Processing status for background queue
   final String llmProcessingStatus; // 'pending', 'processing', 'completed', 'failed'
@@ -45,6 +46,7 @@ class PaymentSlip {
     this.recipientName,
     this.notes,
     this.category,
+    this.categorySource,
     this.llmProcessingStatus = 'pending',
     this.ragIndexed = false,
     this.updatedAt,
@@ -70,6 +72,7 @@ class PaymentSlip {
       'recipientName': recipientName,
       'notes': notes,
       'category': category,
+      'categorySource': categorySource,
       'llmProcessingStatus': llmProcessingStatus,
       'ragIndexed': ragIndexed ? 1 : 0,
       'updatedAt': updatedAt?.toIso8601String(),
@@ -96,6 +99,7 @@ class PaymentSlip {
       recipientName: map['recipientName'],
       notes: map['notes'],
       category: map['category'],
+      categorySource: map['categorySource'],
       llmProcessingStatus: map['llmProcessingStatus'] ?? 'pending',
       ragIndexed: (map['ragIndexed'] ?? 0) == 1,
       updatedAt: map['updatedAt'] != null ? DateTime.parse(map['updatedAt']) : null,
@@ -122,6 +126,7 @@ class PaymentSlip {
     String? recipientName,
     String? notes,
     String? category,
+    String? categorySource,
     String? llmProcessingStatus,
     bool? ragIndexed,
     DateTime? updatedAt,
@@ -145,6 +150,7 @@ class PaymentSlip {
       recipientName: recipientName ?? this.recipientName,
       notes: notes ?? this.notes,
       category: category ?? this.category,
+      categorySource: categorySource ?? this.categorySource,
       llmProcessingStatus: llmProcessingStatus ?? this.llmProcessingStatus,
       ragIndexed: ragIndexed ?? this.ragIndexed,
       updatedAt: updatedAt ?? this.updatedAt,

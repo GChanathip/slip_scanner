@@ -7,59 +7,9 @@ import 'package:forui/forui.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/category_registry.dart';
 import '../models/payment_slip.dart';
 import '../services/database_service.dart';
-
-const _categories = [
-  'food',
-  'transport',
-  'utilities',
-  'shopping',
-  'transfer',
-  'entertainment',
-  'health',
-  'education',
-  'rent',
-  'subscriptions',
-  'groceries',
-  'personal_care',
-  'gifts',
-  'other',
-];
-
-const _categoryEmoji = {
-  'food': '🍔',
-  'transport': '🚕',
-  'utilities': '💡',
-  'shopping': '🛍️',
-  'transfer': '💸',
-  'entertainment': '🎬',
-  'health': '💊',
-  'education': '📚',
-  'rent': '🏠',
-  'subscriptions': '📱',
-  'groceries': '🛒',
-  'personal_care': '💆',
-  'gifts': '🎁',
-  'other': '📋',
-};
-
-const _categoryLabels = {
-  'food': 'Food',
-  'transport': 'Transport',
-  'utilities': 'Utilities',
-  'shopping': 'Shopping',
-  'transfer': 'Transfer',
-  'entertainment': 'Entertainment',
-  'health': 'Health',
-  'education': 'Education',
-  'rent': 'Rent',
-  'subscriptions': 'Subscriptions',
-  'groceries': 'Groceries',
-  'personal_care': 'Personal Care',
-  'gifts': 'Gifts',
-  'other': 'Other',
-};
 
 String _uniqueId() {
   final ts = DateTime.now().millisecondsSinceEpoch;
@@ -384,11 +334,11 @@ class _ManualEntryBottomSheetState extends State<ManualEntryBottomSheet> {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: _categories.map((cat) {
+          children: kBuiltInCategorySlugs.map((cat) {
             final isSelected = _selectedCategory == cat;
             return _SelectChip(
               label:
-                  '${_categoryEmoji[cat]} ${_categoryLabels[cat]}',
+                  '${getCategoryEmoji(cat)} ${getCategoryLabel(cat)}',
               selected: isSelected,
               onTap: () => setState(() => _selectedCategory = cat),
               theme: theme,

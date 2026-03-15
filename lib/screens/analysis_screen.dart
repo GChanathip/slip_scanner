@@ -11,24 +11,9 @@ import '../providers/budget_provider.dart';
 import '../providers/cactus_provider.dart';
 import '../providers/extraction_provider.dart';
 import '../router/app_router.dart';
+import '../models/category_registry.dart';
 import '../utils/ensure_model.dart';
 import '../utils/formatters.dart';
-
-const _categoryIcons = <String, IconData>{
-  'food': FIcons.utensils,
-  'transport': FIcons.car,
-  'utilities': FIcons.zap,
-  'shopping': FIcons.shoppingBag,
-  'transfer': FIcons.arrowRightLeft,
-  'entertainment': FIcons.gamepad2,
-  'health': FIcons.heart,
-  'education': FIcons.graduationCap,
-  'rent': FIcons.house,
-  'subscriptions': FIcons.repeat,
-  'groceries': FIcons.shoppingCart,
-  'personal_care': FIcons.sparkles,
-  'gifts': FIcons.gift,
-};
 
 const _insightIcons = <String, IconData>{
   'trending_up': FIcons.trendingUp,
@@ -801,7 +786,7 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
   }
 
   Widget _getCategoryIcon(String category, FThemeData theme) {
-    return Icon(_categoryIcons[category.toLowerCase()] ?? FIcons.circle, size: 18, color: theme.colors.primary);
+    return Icon(getCategoryIcon(category.toLowerCase()), size: 18, color: theme.colors.primary);
   }
 
   Widget _buildBudgetProgressCard(FThemeData theme, BudgetState budgetState) {

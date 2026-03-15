@@ -7,42 +7,9 @@ import 'package:intl/intl.dart';
 import '../models/payment_slip.dart';
 import '../services/database_service.dart';
 import '../services/platform_service.dart';
+import '../models/category_registry.dart';
 import '../utils/dialogs.dart';
 import '../utils/formatters.dart';
-
-const _categories = [
-  'food',
-  'transport',
-  'utilities',
-  'shopping',
-  'transfer',
-  'entertainment',
-  'health',
-  'education',
-  'rent',
-  'subscriptions',
-  'groceries',
-  'personal_care',
-  'gifts',
-  'other',
-];
-
-const _categoryLabels = {
-  'food': 'Food',
-  'transport': 'Transport',
-  'utilities': 'Utilities',
-  'shopping': 'Shopping',
-  'transfer': 'Transfer',
-  'entertainment': 'Entertainment',
-  'health': 'Health',
-  'education': 'Education',
-  'rent': 'Rent',
-  'subscriptions': 'Subscriptions',
-  'groceries': 'Groceries',
-  'personal_care': 'Personal Care',
-  'gifts': 'Gifts',
-  'other': 'Other',
-};
 
 @RoutePage()
 class SlipDetailScreen extends StatefulWidget {
@@ -300,7 +267,7 @@ class _SlipDetailScreenState extends State<SlipDetailScreen> {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: _categories.map((cat) {
+          children: kBuiltInCategorySlugs.map((cat) {
             final isSelected = _editCategory == cat;
             return GestureDetector(
               onTap: () => setState(() => _editCategory = cat),
@@ -320,7 +287,7 @@ class _SlipDetailScreenState extends State<SlipDetailScreen> {
                   ),
                 ),
                 child: Text(
-                  _categoryLabels[cat] ?? cat,
+                  getCategoryLabel(cat),
                   style: theme.typography.sm.copyWith(
                     color: isSelected
                         ? theme.colors.primaryForeground

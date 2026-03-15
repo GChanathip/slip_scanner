@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:cactus/cactus.dart';
 import 'package:cactus/models/types.dart';
+import '../models/category_registry.dart';
 import 'cactus_service.dart';
 
 /// Result of LLM extraction from slip text
@@ -89,27 +90,6 @@ Rules:
   static String? _validateCategory(dynamic value) {
     if (value == null) return 'other';
     final str = value.toString().toLowerCase().trim();
-
-    const validCategories = [
-      'food',
-      'transport',
-      'utilities',
-      'shopping',
-      'transfer',
-      'entertainment',
-      'health',
-      'education',
-      'rent',
-      'subscriptions',
-      'groceries',
-      'personal_care',
-      'gifts',
-      'other',
-    ];
-
-    if (validCategories.contains(str)) {
-      return str;
-    }
-    return 'other';
+    return validateCategorySlug(str);
   }
 }

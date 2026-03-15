@@ -28,7 +28,7 @@ class DatabaseService {
     String path = join(await getDatabasesPath(), 'payment_slips.db');
     return await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -57,8 +57,34 @@ class DatabaseService {
         updatedAt TEXT,
         retryCount INTEGER DEFAULT 0,
         isRecurring INTEGER DEFAULT 0,
-        recurringFrequency TEXT
+        recurringFrequency TEXT,
+        categorySource TEXT
       )
+    ''');
+
+    // custom_categories table
+    await db.execute('''
+      CREATE TABLE custom_categories(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        icon TEXT NOT NULL DEFAULT 'utensils',
+        color TEXT NOT NULL DEFAULT 'orange',
+        createdAt TEXT NOT NULL
+      )
+    ''');
+
+    // category_rules table
+    await db.execute('''
+      CREATE TABLE category_rules(
+        recipientPattern TEXT PRIMARY KEY,
+        category TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'user',
+        createdAt TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_category_rules_category ON category_rules(category)
     ''');
 
     // Create index for assetId to prevent duplicates
