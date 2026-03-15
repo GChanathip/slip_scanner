@@ -17,6 +17,7 @@ import '../providers/extraction_provider.dart';
 import '../utils/formatters.dart';
 import '../widgets/hero_card.dart';
 import '../widgets/slip_list_tile.dart';
+import 'manual_entry_bottom_sheet.dart';
 
 @RoutePage()
 class HomeScreen extends ConsumerStatefulWidget {
@@ -263,7 +264,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return FScaffold(
       header: const FHeader(title: Text('Payment Slip Scanner')),
-      child: _isLoading
+      child: Stack(
+        children: [
+          _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: () async {
@@ -272,7 +275,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               },
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
                 children: [
                   HeroCard(
                     onTap: _startScanAllPhotos,
@@ -436,6 +439,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ],
               ),
             ),
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: FButton.icon(
+              onPress: () async {
+                final saved = await showManualEntrySheet(context);
+                if (saved == true) {
+                  await _loadData();
+                  await _loadMonthlySummary();
+                }
+              },
+              child: Icon(FIcons.plus, size: 24),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
