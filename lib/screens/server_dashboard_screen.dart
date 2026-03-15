@@ -2,20 +2,26 @@ import 'dart:async';
 
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
 
+import '../providers/cactus_provider.dart';
+import '../providers/cactus_state.dart';
+import '../providers/extraction_provider.dart';
+import '../providers/extraction_state.dart';
 import '../server/server_service.dart';
 import '../services/config_service.dart';
 
 @RoutePage()
-class ServerDashboardScreen extends StatefulWidget {
+class ServerDashboardScreen extends ConsumerStatefulWidget {
   const ServerDashboardScreen({super.key});
 
   @override
-  State<ServerDashboardScreen> createState() => _ServerDashboardScreenState();
+  ConsumerState<ServerDashboardScreen> createState() =>
+      _ServerDashboardScreenState();
 }
 
-class _ServerDashboardScreenState extends State<ServerDashboardScreen> {
+class _ServerDashboardScreenState extends ConsumerState<ServerDashboardScreen> {
   final _serverService = ServerService.instance;
   final _tokenController = TextEditingController();
   final _secretController = TextEditingController();
@@ -68,6 +74,21 @@ class _ServerDashboardScreenState extends State<ServerDashboardScreen> {
     return port;
   }
 
+  /// Ensure CactusLM is loaded and extraction queue is running.
+  Future<void> _ensureModelAndExtraction() async {
+    final cactusState = ref.read(cactusProvider);
+    if (!cactusState.isModelLoaded && !cactusState.isLoading) {
+      await ref
+          .read(cactusProvider.notifier)
+          .downloadAndInitialize(cactusState.selectedModel);
+    }
+    if (ref.read(cactusProvider).isModelLoaded) {
+      ref
+          .read(extractionQueueProvider.notifier)
+          .startBackgroundProcessing();
+    }
+  }
+
   Future<void> _toggleServer() async {
     if (!_serverService.isRunning) {
       final port = _validatePort();
@@ -87,6 +108,8 @@ class _ServerDashboardScreenState extends State<ServerDashboardScreen> {
         await _serverService.stop();
       } else {
         await _saveConfig();
+        // Initialize LLM and extraction queue before starting server
+        await _ensureModelAndExtraction();
         await _serverService.start();
       }
     } catch (e) {
@@ -102,6 +125,9 @@ class _ServerDashboardScreenState extends State<ServerDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cactusState = ref.watch(cactusProvider);
+    final extractionState = ref.watch(extractionQueueProvider);
+
     return FScaffold(
       header: FHeader(
         title: const Text('Slip Scanner Server'),
@@ -111,9 +137,11 @@ class _ServerDashboardScreenState extends State<ServerDashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildStatusBar(),
+            _buildStatusBar(cactusState),
             const SizedBox(height: 16),
-            _buildServerControls(),
+            _buildServerControls(cactusState),
+            const SizedBox(height: 24),
+            _buildModelStatus(cactusState, extractionState),
             const SizedBox(height: 24),
             _buildLineConfig(),
             const SizedBox(height: 24),
@@ -124,7 +152,7 @@ class _ServerDashboardScreenState extends State<ServerDashboardScreen> {
     );
   }
 
-  Widget _buildStatusBar() {
+  Widget _buildStatusBar(CactusState cactusState) {
     final theme = context.theme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -137,9 +165,12 @@ class _ServerDashboardScreenState extends State<ServerDashboardScreen> {
       child: Row(
         children: [
           Icon(
-            _serverService.isRunning ? Icons.check_circle : Icons.circle_outlined,
+            _serverService.isRunning
+                ? Icons.check_circle
+                : Icons.circle_outlined,
             size: 16,
-            color: _serverService.isRunning ? Colors.green : theme.colors.border,
+            color:
+                _serverService.isRunning ? Colors.green : theme.colors.border,
           ),
           const SizedBox(width: 8),
           Text(
@@ -153,7 +184,14 @@ class _ServerDashboardScreenState extends State<ServerDashboardScreen> {
     );
   }
 
-  Widget _buildServerControls() {
+  Widget _buildServerControls(CactusState cactusState) {
+    final isStarting = _isLoading && !_serverService.isRunning;
+    final buttonLabel = isStarting
+        ? (cactusState.isLoading
+            ? cactusState.downloadStatus
+            : 'Starting...')
+        : 'Start';
+
     return FCard(
       title: const Text('Server'),
       subtitle: const Text('Control the HTTP server for LINE webhook'),
@@ -163,7 +201,8 @@ class _ServerDashboardScreenState extends State<ServerDashboardScreen> {
           children: [
             Expanded(
               child: FTextField(
-                control: FTextFieldControl.managed(controller: _portController),
+                control:
+                    FTextFieldControl.managed(controller: _portController),
                 hint: 'Port',
                 enabled: !_serverService.isRunning,
               ),
@@ -177,8 +216,72 @@ class _ServerDashboardScreenState extends State<ServerDashboardScreen> {
                   )
                 : FButton(
                     onPress: _isLoading ? null : _toggleServer,
-                    child: const Text('Start'),
+                    child: Text(buttonLabel),
                   ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModelStatus(
+      CactusState cactusState, ExtractionQueueState extractionState) {
+    final theme = context.theme;
+
+    String modelStatus;
+    Color statusColor;
+    if (cactusState.isModelLoaded) {
+      modelStatus = 'Ready (${cactusState.selectedModel})';
+      statusColor = Colors.green;
+    } else if (cactusState.isLoading) {
+      modelStatus = cactusState.downloadStatus;
+      statusColor = Colors.orange;
+    } else {
+      modelStatus = 'Not loaded';
+      statusColor = theme.colors.border;
+    }
+
+    return FCard(
+      title: const Text('AI Engine'),
+      subtitle: const Text('CactusLM model and extraction queue status'),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.circle, size: 10, color: statusColor),
+                const SizedBox(width: 8),
+                Text('Model: $modelStatus', style: theme.typography.sm),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(
+                  Icons.circle,
+                  size: 10,
+                  color: extractionState.isProcessing
+                      ? Colors.green
+                      : theme.colors.border,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Extraction: ${extractionState.isProcessing ? 'Running' : 'Idle'}'
+                  ' (${extractionState.pendingCount} pending)',
+                  style: theme.typography.sm,
+                ),
+              ],
+            ),
+            if (cactusState.error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Error: ${cactusState.error}',
+                style: theme.typography.sm
+                    .copyWith(color: theme.colors.destructive),
+              ),
+            ],
           ],
         ),
       ),
@@ -194,13 +297,15 @@ class _ServerDashboardScreenState extends State<ServerDashboardScreen> {
         child: Column(
           children: [
             FTextField(
-              control: FTextFieldControl.managed(controller: _tokenController),
+              control:
+                  FTextFieldControl.managed(controller: _tokenController),
               hint: 'Channel Access Token',
               enabled: !_serverService.isRunning,
             ),
             const SizedBox(height: 12),
             FTextField(
-              control: FTextFieldControl.managed(controller: _secretController),
+              control:
+                  FTextFieldControl.managed(controller: _secretController),
               hint: 'Channel Secret',
               enabled: !_serverService.isRunning,
             ),

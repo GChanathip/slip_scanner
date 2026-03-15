@@ -85,6 +85,10 @@ Guidelines:
   /// Process a text query and return the LLM response.
   /// Used by LINE bot for text messages.
   static Future<String> processQuery(String userMessage) async {
+    if (!CactusService.instance.isLoaded) {
+      return 'The AI model is not loaded yet. OCR scanning still works, but text queries are unavailable. Please load the model from the server dashboard first.';
+    }
+
     // 1. Search RAG for relevant context
     String ragContext = '';
     try {
