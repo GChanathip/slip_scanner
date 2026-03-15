@@ -28,7 +28,7 @@ class DatabaseService {
     String path = join(await getDatabasesPath(), 'payment_slips.db');
     return await openDatabase(
       path,
-      version: 7,
+      version: 8,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -58,7 +58,9 @@ class DatabaseService {
         retryCount INTEGER DEFAULT 0,
         isRecurring INTEGER DEFAULT 0,
         recurringFrequency TEXT,
-        categorySource TEXT
+        categorySource TEXT,
+        bankType TEXT,
+        transRef TEXT
       )
     ''');
 
@@ -179,6 +181,12 @@ class DatabaseService {
       await db.execute('''
         CREATE INDEX idx_category_rules_category ON category_rules(category)
       ''');
+    }
+
+    if (oldVersion < 8) {
+      // Add bank detection fields
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN bankType TEXT');
+      await db.execute('ALTER TABLE payment_slips ADD COLUMN transRef TEXT');
     }
   }
 

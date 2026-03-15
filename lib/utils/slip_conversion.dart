@@ -95,6 +95,8 @@ List<PaymentSlip> convertSlipsInIsolate(List<dynamic> slips) {
       senderAccount: nonEmpty(slipData['senderAccount']),
       receiverAccount: nonEmpty(slipData['receiverAccount']),
       transactionTime: nonEmpty(slipData['time']),
+      bankType: nonEmpty(slipData['bankType']),
+      transRef: nonEmpty(slipData['transRef']),
     );
   }).toList();
 }

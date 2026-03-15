@@ -26,6 +26,10 @@ class PaymentSlip {
   final DateTime? updatedAt;
   final int retryCount;
 
+  // Bank detection fields
+  final String? bankType; // BankType enum raw value (e.g. 'scb', 'kbank')
+  final String? transRef; // PromptPay transaction reference (22-25 digit NITMX ID)
+
   // Recurring transaction fields
   final bool isRecurring;
   final String? recurringFrequency; // 'weekly', 'monthly', 'custom', or null
@@ -51,6 +55,8 @@ class PaymentSlip {
     this.ragIndexed = false,
     this.updatedAt,
     this.retryCount = 0,
+    this.bankType,
+    this.transRef,
     this.isRecurring = false,
     this.recurringFrequency,
   });
@@ -77,6 +83,8 @@ class PaymentSlip {
       'ragIndexed': ragIndexed ? 1 : 0,
       'updatedAt': updatedAt?.toIso8601String(),
       'retryCount': retryCount,
+      'bankType': bankType,
+      'transRef': transRef,
       'isRecurring': isRecurring ? 1 : 0,
       'recurringFrequency': recurringFrequency,
     };
@@ -104,6 +112,8 @@ class PaymentSlip {
       ragIndexed: (map['ragIndexed'] ?? 0) == 1,
       updatedAt: map['updatedAt'] != null ? DateTime.parse(map['updatedAt']) : null,
       retryCount: map['retryCount'] as int? ?? 0,
+      bankType: map['bankType'] as String?,
+      transRef: map['transRef'] as String?,
       isRecurring: (map['isRecurring'] ?? 0) == 1,
       recurringFrequency: map['recurringFrequency'],
     );
@@ -131,6 +141,8 @@ class PaymentSlip {
     bool? ragIndexed,
     DateTime? updatedAt,
     int? retryCount,
+    String? bankType,
+    String? transRef,
     bool? isRecurring,
     String? recurringFrequency,
   }) {
@@ -155,6 +167,8 @@ class PaymentSlip {
       ragIndexed: ragIndexed ?? this.ragIndexed,
       updatedAt: updatedAt ?? this.updatedAt,
       retryCount: retryCount ?? this.retryCount,
+      bankType: bankType ?? this.bankType,
+      transRef: transRef ?? this.transRef,
       isRecurring: isRecurring ?? this.isRecurring,
       recurringFrequency: recurringFrequency ?? this.recurringFrequency,
     );
