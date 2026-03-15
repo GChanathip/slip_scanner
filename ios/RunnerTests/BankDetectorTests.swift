@@ -70,6 +70,67 @@ class BankDetectorTests: XCTestCase {
         XCTAssertEqual(bankType, .dime)
     }
 
+    // MARK: - Cross-Bank Transfer Detection
+    // These tests verify that the issuing bank (header) wins over the receiver bank (body)
+    // when both bank names appear in the same slip OCR text.
+
+    func testDetect_TTB_crossBank_receiverIsKTB() {
+        // TTBFixtures.ttbTouchTransfer: "ttb touch" header, receiver account at ธนาคารกรุงไทย
+        // KTB anchor (ธนาคารกรุงไทย) must NOT win over TTB anchor (ttb) which is earlier.
+        let bankType = BankDetector.detect(TTBFixtures.ttbTouchTransfer)
+        XCTAssertEqual(bankType, .ttb)
+    }
+
+    func testDetect_GSB_crossBank_receiverIsBBL() {
+        // GSBFixtures.mymoColonStyle: "GSB" header, receiver account at ธนาคารกรุงเทพ
+        // BBL anchor (ธนาคารกรุงเทพ) must NOT win over GSB anchor (GSB) which is earlier.
+        let bankType = BankDetector.detect(GSBFixtures.mymoColonStyle)
+        XCTAssertEqual(bankType, .gsb)
+    }
+
+    func testDetect_KTB_crossBank_receiverIsKBank() {
+        // KTBFixtures.ktbAppTransfer: "ธนาคารกรุงไทย" header, receiver account at ธนาคารกสิกรไทย
+        // KBank anchor (ธนาคารกสิกรไทย) must NOT win over KTB anchor (ธนาคารกรุงไทย) which is earlier.
+        let bankType = BankDetector.detect(KTBFixtures.ktbAppTransfer)
+        XCTAssertEqual(bankType, .ktb)
+    }
+
+    func testDetect_TTB_crossBank_receiverIsSCB() {
+        let text = """
+ttb touch
+โอนเงินสำเร็จ
+ชื่อบัญชีผู้โอน
+นายสมชาย ใจดี
+xxx-x-x1234-x
+ชื่อบัญชีผู้รับ
+นางสาวรับเงิน ใจดี
+xxx-x-x5678-x
+ธนาคารไทยพาณิชย์
+จำนวนเงิน 800.00 บาท
+"""
+        // SCB (ธนาคารไทยพาณิชย์) appears only as receiver bank; TTB (ttb) is the header.
+        let bankType = BankDetector.detect(text)
+        XCTAssertEqual(bankType, .ttb)
+    }
+
+    func testDetect_KTB_crossBank_receiverIsBBL() {
+        let text = """
+ธนาคารกรุงไทย
+โอนเงินสำเร็จ
+ชื่อผู้โอน
+นายทดสอบ ระบบ
+xxx-x-x9999-x
+ชื่อผู้รับ
+บริษัท ทดสอบ จำกัด
+xxx-x-x3333-x
+ธนาคารกรุงเทพ
+จำนวนเงิน 3,000.00 บาท
+"""
+        // BBL (ธนาคารกรุงเทพ) appears only as receiver bank; KTB (ธนาคารกรุงไทย) is the header.
+        let bankType = BankDetector.detect(text)
+        XCTAssertEqual(bankType, .ktb)
+    }
+
     // MARK: - Unknown Detection
 
     func testDetect_unknown_noAnchors() {
