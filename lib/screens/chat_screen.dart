@@ -2,6 +2,8 @@ import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
+import '../providers/analysis_provider.dart';
+import '../providers/budget_provider.dart';
 import '../providers/chat_provider.dart';
 import '../providers/chat_state.dart';
 import '../providers/cactus_provider.dart';
@@ -195,7 +197,43 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
+  List<String> _buildSmartSuggestions() {
+    final suggestions = <String>[];
+    final analysisState = ref.read(analysisProvider);
+    final budgetState = ref.read(budgetProvider);
+
+    // Budget-aware suggestions
+    if (budgetState.hasBudget) {
+      if (budgetState.overallPercentage > 75) {
+        suggestions.add("I'm over budget — where can I cut back?");
+      } else {
+        suggestions.add("How's my budget looking this month?");
+      }
+    }
+
+    // Category-aware suggestion
+    final topCat = analysisState.topCategory;
+    if (topCat != null) {
+      suggestions.add('If I cut ${formatCategory(topCat)} by 20%, how much do I save per year?');
+    }
+
+    // Recipient-aware suggestion
+    if (analysisState.topRecipients.isNotEmpty) {
+      suggestions.add('Who are my top recipients this month?');
+    }
+
+    // Always available suggestions
+    suggestions.addAll([
+      'Give me a monthly spending summary',
+      'What are my spending patterns by day of week?',
+      'Any unusual spending lately?',
+    ]);
+
+    return suggestions.take(4).toList();
+  }
+
   Widget _buildEmptyState(FThemeData theme) {
+    final suggestions = _buildSmartSuggestions();
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -214,11 +252,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             spacing: 8,
             runSpacing: 8,
             alignment: WrapAlignment.center,
-            children: [
-              _buildSuggestionChip('What did I spend the most on?'),
-              _buildSuggestionChip('Show my biggest expenses'),
-              _buildSuggestionChip('Any budget advice?'),
-            ],
+            children: suggestions.map((s) => _buildSuggestionChip(s)).toList(),
           ),
         ],
       ),

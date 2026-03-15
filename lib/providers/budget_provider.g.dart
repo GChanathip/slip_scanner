@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'analysis_provider.dart';
+part of 'budget_provider.dart';
 
 // **************************************************************************
 // RiverpodGenerator
@@ -9,51 +9,50 @@ part of 'analysis_provider.dart';
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
 
-@ProviderFor(Analysis)
-final analysisProvider = AnalysisProvider._();
+@ProviderFor(Budget)
+final budgetProvider = BudgetProvider._();
 
-final class AnalysisProvider
-    extends $NotifierProvider<Analysis, AnalysisState> {
-  AnalysisProvider._()
+final class BudgetProvider extends $NotifierProvider<Budget, BudgetState> {
+  BudgetProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
-        name: r'analysisProvider',
+        name: r'budgetProvider',
         isAutoDispose: true,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
 
   @override
-  String debugGetCreateSourceHash() => _$analysisHash();
+  String debugGetCreateSourceHash() => _$budgetHash();
 
   @$internal
   @override
-  Analysis create() => Analysis();
+  Budget create() => Budget();
 
   /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(AnalysisState value) {
+  Override overrideWithValue(BudgetState value) {
     return $ProviderOverride(
       origin: this,
-      providerOverride: $SyncValueProvider<AnalysisState>(value),
+      providerOverride: $SyncValueProvider<BudgetState>(value),
     );
   }
 }
 
-String _$analysisHash() => r'197667ad59a3c2bda4e8d952c8dfd0a93401a9c9';
+String _$budgetHash() => r'dda78e2d2babda7c1112b24a5774577f6c8efe6c';
 
-abstract class _$Analysis extends $Notifier<AnalysisState> {
-  AnalysisState build();
+abstract class _$Budget extends $Notifier<BudgetState> {
+  BudgetState build();
   @$mustCallSuper
   @override
   void runBuild() {
-    final ref = this.ref as $Ref<AnalysisState, AnalysisState>;
+    final ref = this.ref as $Ref<BudgetState, BudgetState>;
     final element =
         ref.element
             as $ClassProviderElement<
-              AnyNotifier<AnalysisState, AnalysisState>,
-              AnalysisState,
+              AnyNotifier<BudgetState, BudgetState>,
+              BudgetState,
               Object?,
               Object?
             >;

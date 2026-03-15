@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:cactus/cactus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import '../services/budget_service.dart';
 import '../services/database_service.dart';
 import '../services/cactus_service.dart';
 import '../models/payment_slip.dart';
@@ -136,6 +137,52 @@ class Analysis extends _$Analysis {
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     final insights = <InsightData>[];
     final total = slips.fold<double>(0, (sum, s) => sum + s.amount);
+
+    // Budget alerts
+    try {
+      final overallBudget = await BudgetService.getOverallBudget();
+      if (overallBudget > 0) {
+        final now = DateTime.now();
+        final monthStart = DateTime(now.year, now.month, 1);
+        final monthSpent = await DatabaseService.getTotalForPeriod(monthStart, now);
+        final pct = monthSpent / overallBudget * 100;
+        if (pct >= 100) {
+          insights.add(InsightData(
+            title: 'Budget Exceeded',
+            description: 'You\'ve spent ${formatCurrencyCompact(monthSpent)} of your ${formatCurrencyCompact(overallBudget)} budget (${pct.toStringAsFixed(0)}%)',
+            type: 'anomaly',
+            value: pct,
+            icon: 'alert',
+          ));
+        } else if (pct >= 90) {
+          insights.add(InsightData(
+            title: 'Budget Critical',
+            description: '${pct.toStringAsFixed(0)}% of monthly budget used — ${formatCurrencyCompact(overallBudget - monthSpent)} remaining',
+            type: 'anomaly',
+            value: pct,
+            icon: 'alert',
+          ));
+        } else if (pct >= 75) {
+          insights.add(InsightData(
+            title: 'Budget Warning',
+            description: '${pct.toStringAsFixed(0)}% of monthly budget used — ${formatCurrencyCompact(overallBudget - monthSpent)} remaining',
+            type: 'trend',
+            value: pct,
+            icon: 'trending_up',
+          ));
+        } else if (pct >= 50) {
+          insights.add(InsightData(
+            title: 'Budget Halfway',
+            description: '${pct.toStringAsFixed(0)}% of monthly budget used — on track',
+            type: 'trend',
+            value: pct,
+            icon: 'info',
+          ));
+        }
+      }
+    } catch (e) {
+      debugPrint('Budget insight failed: $e');
+    }
 
     // Top category
     if (categories.isNotEmpty) {

@@ -1,8 +1,10 @@
 import 'package:cactus/cactus.dart';
 import 'package:flutter/foundation.dart';
 
+import 'budget_service.dart';
 import 'cactus_service.dart';
 import 'database_service.dart';
+import 'scenario_service.dart';
 
 const _dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -36,7 +38,8 @@ Guidelines:
 - Reference the day-of-week patterns, spending velocity, and recipient data above to give specific advice
 - If asked about specific transactions, reference the data above
 - For budget advice, be practical and non-judgmental
-- Answer in the same language the user uses (Thai or English)''';
+- Answer in the same language the user uses (Thai or English)
+- When users ask what-if questions (e.g. "If I cut X by Y%?"), use the pre-computed projections in the stats above. For custom percentages not listed, calculate proportionally from the monthly average.''';
   }
 
   /// Get summary statistics for a date range, enriched with analytics.
@@ -135,6 +138,58 @@ Guidelines:
         }
       } catch (e) {
         debugPrint('Top recipients stats failed: $e');
+      }
+
+      // Budget tracking
+      try {
+        final overallBudget = await BudgetService.getOverallBudget();
+        if (overallBudget > 0) {
+          final now = DateTime.now();
+          final monthStart = DateTime(now.year, now.month, 1);
+          final monthSpent = await DatabaseService.getTotalForPeriod(monthStart, now);
+          final remaining = overallBudget - monthSpent;
+          final pct = (monthSpent / overallBudget * 100);
+          buffer.writeln('\nBudget tracking:');
+          buffer.writeln('- Monthly budget: ${overallBudget.toStringAsFixed(0)} baht');
+          buffer.writeln('- Spent this month: ${monthSpent.toStringAsFixed(0)} baht (${pct.toStringAsFixed(0)}%)');
+          buffer.writeln('- Remaining: ${remaining.toStringAsFixed(0)} baht');
+          if (pct >= 90) {
+            buffer.writeln('- WARNING: Spending is at ${pct.toStringAsFixed(0)}% of monthly budget!');
+          }
+        }
+
+        final categoryBudgets = await BudgetService.getCategoryBudgets();
+        if (categoryBudgets.isNotEmpty) {
+          buffer.writeln('\nCategory budgets:');
+          for (final entry in categoryBudgets.entries) {
+            final catSpent = byCategory[entry.key] ?? 0;
+            final catPct = entry.value > 0 ? (catSpent / entry.value * 100) : 0;
+            buffer.writeln('- ${entry.key}: ${catSpent.toStringAsFixed(0)}/${entry.value.toStringAsFixed(0)} baht (${catPct.toStringAsFixed(0)}%)');
+          }
+        }
+      } catch (e) {
+        debugPrint('Budget stats failed: $e');
+      }
+
+      // What-if spending projections
+      try {
+        final scenarios = await ScenarioService.generateScenarios();
+        if (scenarios.isNotEmpty) {
+          buffer.writeln('\nWhat-If Projections (pre-computed, 3-month rolling avg):');
+          for (final s in scenarios) {
+            final avg = s.currentMonthlyAvg.toStringAsFixed(0);
+            final save20 = s.savingsByReductionPct[20]!.toStringAsFixed(0);
+            final annual20 = s.annualizedSavings[20]!.toStringAsFixed(0);
+            buffer.writeln(
+              '- ${s.category}: $avg baht/month avg. '
+              'Cut 10% → save ${s.savingsByReductionPct[10]!.toStringAsFixed(0)}/month, '
+              'Cut 20% → save $save20/month ($annual20/year), '
+              'Cut 30% → save ${s.savingsByReductionPct[30]!.toStringAsFixed(0)}/month',
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('What-if projections failed: $e');
       }
 
       return buffer.toString();

@@ -511,6 +511,29 @@ class DatabaseService {
     };
   }
 
+  /// Get 3-month rolling average monthly spend per category.
+  ///
+  /// [months] controls how many past months to include (default 3).
+  /// Returns category -> average monthly spend, excluding null/empty categories.
+  static Future<Map<String, double>> getCategoryMonthlyAverages({int months = 3}) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT category, AVG(monthly_total) as avg
+      FROM (
+        SELECT category, strftime('%Y-%m', date) as month, SUM(amount) as monthly_total
+        FROM payment_slips
+        WHERE date >= date('now', '-$months months') AND category IS NOT NULL AND category != ''
+        GROUP BY category, strftime('%Y-%m', date)
+      )
+      GROUP BY category
+    ''');
+
+    return {
+      for (final row in result)
+        row['category'] as String: (row['avg'] as num).toDouble()
+    };
+  }
+
   /// Get slips that haven't been indexed in RAG
   static Future<List<PaymentSlip>> getUnindexedSlips({int limit = 10}) async {
     final db = await database;

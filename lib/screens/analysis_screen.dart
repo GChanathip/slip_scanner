@@ -4,8 +4,10 @@ import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:forui/forui.dart';
+import 'package:slip_scanner/providers/budget_state.dart';
 import '../providers/analysis_provider.dart';
 import '../providers/analysis_state.dart';
+import '../providers/budget_provider.dart';
 import '../providers/cactus_provider.dart';
 import '../providers/extraction_provider.dart';
 import '../router/app_router.dart';
@@ -296,9 +298,19 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
   // ============ Summary View ============
 
   Widget _buildSummaryView(FThemeData theme, AnalysisState state) {
+    final budgetState = ref.watch(budgetProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Budget Progress
+        if (budgetState.hasBudget) ...[
+          _buildBudgetProgressCard(theme, budgetState),
+          const SizedBox(height: 16),
+        ] else ...[
+          _buildSetBudgetCard(theme),
+          const SizedBox(height: 16),
+        ],
+
         // Category Breakdown
         if (state.categoryBreakdown.isNotEmpty) ...[
           Text('Spending by Category', style: theme.typography.xl),
@@ -779,6 +791,142 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
 
   Widget _getCategoryIcon(String category, FThemeData theme) {
     return Icon(_categoryIcons[category.toLowerCase()] ?? FIcons.circle, size: 18, color: theme.colors.primary);
+  }
+
+  Widget _buildBudgetProgressCard(FThemeData theme, BudgetState budgetState) {
+    final pct = budgetState.overallPercentage;
+    final color = pct >= 100 ? Colors.red : pct >= 75 ? Colors.orange : Colors.green;
+    final remaining = budgetState.overallBudget - budgetState.currentMonthSpent;
+
+    return FCard.raw(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(FIcons.target, size: 18, color: color),
+                    const SizedBox(width: 8),
+                    Text('Monthly Budget', style: theme.typography.base.copyWith(fontWeight: FontWeight.w600)),
+                  ],
+                ),
+                GestureDetector(
+                  onTap: () => _showBudgetDialog(theme),
+                  child: Icon(FIcons.settings, size: 16, color: theme.colors.mutedForeground),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${formatCurrencyCompact(budgetState.currentMonthSpent)} / ${formatCurrencyCompact(budgetState.overallBudget)}',
+                  style: theme.typography.base.copyWith(fontWeight: FontWeight.w500),
+                ),
+                Text(
+                  '${pct.toStringAsFixed(0)}%',
+                  style: theme.typography.base.copyWith(color: color, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: (pct / 100).clamp(0.0, 1.0),
+                backgroundColor: theme.colors.muted,
+                color: color,
+                minHeight: 10,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              remaining >= 0
+                  ? '${formatCurrencyCompact(remaining)} remaining'
+                  : '${formatCurrencyCompact(remaining.abs())} over budget',
+              style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSetBudgetCard(FThemeData theme) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showBudgetDialog(theme),
+        borderRadius: theme.style.borderRadius,
+        child: FCard.raw(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Icon(FIcons.target, size: 18, color: theme.colors.mutedForeground),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Set a Budget', style: theme.typography.base.copyWith(fontWeight: FontWeight.w500)),
+                      Text(
+                        'Track monthly spending against a target',
+                        style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(FIcons.chevronRight, color: theme.colors.mutedForeground),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showBudgetDialog(FThemeData theme) {
+    final budgetState = ref.read(budgetProvider);
+    final controller = TextEditingController(
+      text: budgetState.overallBudget > 0 ? budgetState.overallBudget.toStringAsFixed(0) : '',
+    );
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Monthly Budget'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Monthly budget (baht)',
+            prefixText: '฿ ',
+            hintText: 'e.g. 15000',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final amount = double.tryParse(controller.text) ?? 0;
+              ref.read(budgetProvider.notifier).setOverallBudget(amount);
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildEmptyState(FThemeData theme) {
