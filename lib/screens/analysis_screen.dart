@@ -311,6 +311,12 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
           const SizedBox(height: 16),
         ],
 
+        // Per-category budget bars
+        if (budgetState.categoryBudgets.isNotEmpty) ...[
+          _buildCategoryBudgetBars(theme, budgetState),
+          const SizedBox(height: 16),
+        ],
+
         // Category Breakdown
         if (state.categoryBreakdown.isNotEmpty) ...[
           Text('Spending by Category', style: theme.typography.xl),
@@ -851,6 +857,71 @@ class _AnalysisScreenState extends ConsumerState<AnalysisScreen> {
                   : '${formatCurrencyCompact(remaining.abs())} over budget',
               style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryBudgetBars(FThemeData theme, BudgetState budgetState) {
+    final entries = budgetState.categoryBudgets.entries
+        .where((e) => e.value > 0)
+        .toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+
+    return FCard.raw(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(FIcons.layoutList, size: 18, color: theme.colors.primary),
+                const SizedBox(width: 8),
+                Text('Category Budgets', style: theme.typography.base.copyWith(fontWeight: FontWeight.w600)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ...entries.map((entry) {
+              final spent = budgetState.currentMonthByCategory[entry.key] ?? 0.0;
+              final pct = (spent / entry.value * 100).clamp(0.0, 999.0);
+              final barColor = pct >= 90 ? Colors.red : pct >= 75 ? Colors.orange : Colors.green;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            _getCategoryIcon(entry.key, theme),
+                            const SizedBox(width: 6),
+                            Text(formatCategory(entry.key), style: theme.typography.sm),
+                          ],
+                        ),
+                        Text(
+                          '${formatCurrencyCompact(spent)} / ${formatCurrencyCompact(entry.value)} (${pct.toStringAsFixed(0)}%)',
+                          style: theme.typography.sm.copyWith(color: theme.colors.mutedForeground),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: (pct / 100).clamp(0.0, 1.0),
+                        backgroundColor: theme.colors.muted,
+                        color: barColor,
+                        minHeight: 8,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
           ],
         ),
       ),

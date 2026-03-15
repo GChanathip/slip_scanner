@@ -30,7 +30,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    // Set date range if provided; always load suggestion chips
+    // Set date range if provided; always load suggestion chips + inject summary
     Future.microtask(() {
       final notifier = ref.read(chatProvider.notifier);
       if (widget.startDate != null || widget.endDate != null) {
@@ -38,6 +38,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       } else {
         notifier.loadSuggestionChips();
       }
+      notifier.injectSummaryIfNeeded();
     });
     // Ref-counted pause: extraction yields while chat is active (avoids LLM lock contention).
     // resumeExtraction() in dispose() is always called regardless of how the screen exits.

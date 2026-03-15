@@ -1,8 +1,10 @@
 import 'package:cactus/cactus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/cactus_service.dart';
 import '../services/chat_query_service.dart';
+import '../services/monthly_summary_service.dart';
 import '../services/suggestion_chip_service.dart';
 import 'analysis_provider.dart';
 import 'budget_provider.dart';
@@ -122,6 +124,35 @@ class Chat extends _$Chat {
         timestamp: DateTime.now(),
       );
       state = state.copyWith(messages: [...state.messages, errorMsg]);
+    }
+  }
+
+  /// Inject last month's summary as the first assistant message, once per month.
+  Future<void> injectSummaryIfNeeded() async {
+    if (state.hasMessages) return;
+    try {
+      final now = DateTime.now();
+      final prev = now.month == 1 ? DateTime(now.year - 1, 12) : DateTime(now.year, now.month - 1);
+      final monthKey = '${prev.year}-${prev.month.toString().padLeft(2, '0')}';
+      final summary = await MonthlySummaryService.instance.getSummary(monthKey);
+      if (summary == null) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'chat_summary_injected_$monthKey';
+      if (prefs.getBool(key) == true) return;
+      await prefs.setBool(key, true);
+
+      state = state.copyWith(
+        messages: [
+          ChatMessageModel(
+            role: 'assistant',
+            content: summary.narrative,
+            timestamp: DateTime.now(),
+          ),
+        ],
+      );
+    } catch (e) {
+      debugPrint('ChatProvider: summary injection failed: $e');
     }
   }
 
